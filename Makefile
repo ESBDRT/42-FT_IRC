@@ -20,11 +20,12 @@ $(NAME): $(OBJECTS)
 	@echo "$(COLOR_BLUE)[COMPILED] $(END_COLOR)$<"
 
 clean:
-	@$(foreach file,$(OBJECTS),echo "$(COLOR_RED)[DELETED]$(END_COLOR) $(file)";)
 	@rm -f $(OBJECTS)
+	@$(foreach file,$(OBJECTS),echo "$(COLOR_RED)[DELETED]$(END_COLOR) $(file)";)
 
 fclean: clean
 	@rm -f $(NAME)
+	@echo "$(COLOR_RED)[DELETED]$(END_COLOR) $(NAME)"
 	@echo "\n$(COLOR_GREEN)FCLEAN SUCCESS$(END_COLOR)"
 
 re: fclean all
