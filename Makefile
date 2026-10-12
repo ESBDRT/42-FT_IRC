@@ -1,8 +1,8 @@
 C++ = c++
-CCFLAGS = -Wall -Wextra -Werror
+CCFLAGS = -Wall -Wextra -Werror -std=c++98
 NAME = ircserv
-SRCS = srcs/main.c
-OBJECTS = $(SRCS:.c=.o)
+SRCS = srcs/main.cpp
+OBJECTS = $(SRCS:.cpp=.o)
 
 COLOR_GREEN=\033[38;5;46m
 COLOR_RED=\033[38;2;255;0;0m
@@ -15,7 +15,7 @@ $(NAME): $(OBJECTS)
 	@$(C++) $(CCFLAGS) $(OBJECTS) -o $(NAME)
 	@echo "\n$(COLOR_GREEN)COMPILATION SUCCESS $(END_COLOR)"
 
-%.o: %.c
+%.o: %.cpp
 	@$(CC) $(CCFLAGS) -c $< -o $@
 	@echo "$(COLOR_BLUE)[COMPILED] $(END_COLOR)$<"
 
