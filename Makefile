@@ -28,6 +28,6 @@ fclean: clean
 	@rm -f $(NAME)
 	@echo "$(CLR_RED)[DELETED]$(CLR_RST) $(NAME)"
 	@echo "\n$(CLR_GREEN)$(words $(OBJECTS)) $(CLR_RST)FILES DELETED"
-	@echo "$(CLR_GREEN)[FCLEAN PROJECT $(NAME) SUCCESS]$(CLR_RST)"
+	@echo "$(CLR_GREEN)[PROJECT $(NAME) FCLEAN SUCCESS]$(CLR_RST)"
 
 re: fclean all
