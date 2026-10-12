@@ -1,6 +1,6 @@
 C++ = c++
 CCFLAGS = -Wall -Wextra -Werror
-NAME = minishell
+NAME = ircserv
 SRCS = srcs/main.c
 OBJECTS = $(SRCS:.c=.o)
 
