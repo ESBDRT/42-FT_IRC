@@ -21,11 +21,6 @@
 #define CLR_YELLOW  "\033[38;2;255;255;0m"
 #define CLR_RST     "\033[0m"
 
-// ----------------------------------|ERRORS|---------------------------------- //
-
-// Output the err message passed in parameter in stderr
-void display_err(std::string err);
-
 // ----------------------------------|INITS|---------------------------------- //
 
 // Initialize the server_socket, binds it and start listening
@@ -41,9 +36,6 @@ int check_port_conversion(const char *str_port);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
-// Returns a string with current time
-std::string displayTime();
-
 /*
 This function is meant to be used only when the log is related to the IRC
 
@@ -52,3 +44,6 @@ Log in the proper stream using colors based on a Linux log level style
 lvl options (s == SUCCESS | i == INFO | w == WARNING| e = ERROR)
 */
 void logMsg(char lvl, std::string msg);
+
+// Output the err message passed in parameter in stderr
+void display_err(std::string err);

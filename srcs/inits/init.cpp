@@ -1,7 +1,7 @@
 #include "../../include/main.hpp"
 
-int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port)
-{
+int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port){
+    
     struct sockaddr_in addr;
 
     serverSocket = -1;
