@@ -1,7 +1,7 @@
 C++ = c++
 CCFLAGS = -Wall -Wextra -Werror -std=c++98
 NAME = ircserv
-SRCS = srcs/main.cpp srcs/errors/errors.cpp srcs/checks/checks.cpp srcs/inits/init.cpp srcs/utils/time.cpp
+SRCS = srcs/main.cpp srcs/errors/errors.cpp srcs/checks/checks.cpp srcs/inits/init.cpp srcs/utils/time.cpp srcs/utils/logs.cpp
 OBJECTS = $(SRCS:.cpp=.o)
 
 CLR_GREEN=\033[38;5;46m
@@ -29,5 +29,6 @@ fclean: clean
 	@echo -e "$(CLR_RED)[DELETED]$(CLR_RST) $(NAME)"
 	@echo -e "\n$(CLR_GREEN)$(words $(OBJECTS)) $(CLR_RST)FILES DELETED"
 	@echo -e "$(CLR_GREEN)[PROJECT $(NAME) FCLEAN SUCCESS]$(CLR_RST)"
+	@echo -e "-------------------------------------------------------"
 
 re: fclean all

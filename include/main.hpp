@@ -11,12 +11,14 @@
 #include <cerrno>
 #include <ctime>
 #include <unistd.h>
+#include <vector>
 
 
-#define CLR_GREEN "\033[38;5;46m"
-#define CLR_RED   "\033[38;2;255;0;0m"
-#define CLR_BLUE  "\033[38;2;0;157;255m"
-#define CLR_RST   "\033[0m"
+#define CLR_GREEN   "\033[38;5;46m"
+#define CLR_RED     "\033[38;2;255;0;0m"
+#define CLR_BLUE    "\033[38;2;0;157;255m"
+#define CLR_YELLOW  "\033[38;2;255;255;0m"
+#define CLR_RST     "\033[0m"
 
 // ----------------------------------|ERRORS|---------------------------------- //
 
@@ -26,7 +28,10 @@ void display_err(std::string err);
 // ----------------------------------|INITS|---------------------------------- //
 
 // Initialize the server_socket, binds it and start listening
-int init_server_socket(int &serverSocket, int &clientSocket, const char *str_port);
+int init_server_socket(int &serverSocket, const char *str_port);
+
+// Get a new clientSocket to establish connection
+int init_client_socket(int &serverSocket);
 
 // ----------------------------------|CHECKS|---------------------------------- //
 
@@ -35,5 +40,7 @@ int check_port_conversion(const char *str_port);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
-// Just read the function name bro
-void displayTime();
+// Returns a string with current time
+std::string displayTime();
+
+void logMsg(char lvl, std::string msg);

@@ -2,14 +2,27 @@
 
 int main(int argc, const char **argv)
 {
-    int server_sockt = -1;
-    int client_sockt = -1;
+    int serverSocket;
+    int clientSocket;
 
     if (argc != 3)
         return (display_err("bad arguments: ./ircserv <port> <password>"), 1);
 
-    if (init_server_socket(server_sockt, client_sockt, argv[1]))
+    if (init_server_socket(serverSocket, argv[1]))
         return (1);
+
+    while (true)
+    {
+        clientSocket = init_client_socket(serverSocket);
+
+        if (clientSocket == -1)
+            continue;
+
+        logMsg('s', "NEW CLIENT CONNECTED");
+
+        // For now, just close this client.
+        close(clientSocket);
+    }
    
-    return (close(server_sockt), close(client_sockt), 0);
+    return (close(serverSocket), 0);
 }

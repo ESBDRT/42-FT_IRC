@@ -1,6 +1,6 @@
 #include "../../include/main.hpp"
 
-int init_server_socket(int &serverSocket, int &clientSocket, const char *str_port)
+int init_server_socket(int &serverSocket, const char *str_port)
 {
     struct sockaddr_in addr;
 
@@ -29,12 +29,15 @@ int init_server_socket(int &serverSocket, int &clientSocket, const char *str_por
         return (1);
     }
 
-    displayTime();
-    std::cout << CLR_GREEN << "[SERVER]: " << CLR_RST << "Waiting for connections.." << std::endl;
-
-    clientSocket = -1;
-
-    // clientSocket = accept(serverSocket, NULL, NULL);
-
+    logMsg('x', "Waiting for connections...");
     return (0);
+}
+
+int init_client_socket(int &serverSocket){
+
+    int clientSocket = accept(serverSocket, NULL, NULL);
+    if (clientSocket == -1)
+        return (display_err("accept: " + std::string(std::strerror(errno))), -1);
+    else
+        return (clientSocket);
 }
