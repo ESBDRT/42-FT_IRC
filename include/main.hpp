@@ -44,4 +44,11 @@ int check_port_conversion(const char *str_port);
 // Returns a string with current time
 std::string displayTime();
 
+/*
+This function is meant to be used only when the log is related to the IRC
+
+Log in the proper stream using colors based on a Linux log level style
+
+lvl options (s == SUCCESS | i == INFO | w == WARNING| e = ERROR)
+*/
 void logMsg(char lvl, std::string msg);
