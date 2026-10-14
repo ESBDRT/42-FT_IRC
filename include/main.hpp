@@ -12,6 +12,7 @@
 #include <ctime>
 #include <unistd.h>
 #include <vector>
+#include <poll.h>
 
 
 #define CLR_GREEN   "\033[38;5;46m"
@@ -28,7 +29,7 @@ void display_err(std::string err);
 // ----------------------------------|INITS|---------------------------------- //
 
 // Initialize the server_socket, binds it and start listening
-int init_server_socket(int &serverSocket, const char *str_port);
+int init_server_socket(std::vector<struct pollfd> &clients, int &serverSocket, const char *str_port);
 
 // Get a new clientSocket to establish connection
 int init_client_socket(int &serverSocket);

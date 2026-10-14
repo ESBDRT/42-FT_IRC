@@ -1,6 +1,6 @@
 #include "../../include/main.hpp"
 
-int init_server_socket(int &serverSocket, const char *str_port)
+int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port)
 {
     struct sockaddr_in addr;
 
@@ -28,6 +28,13 @@ int init_server_socket(int &serverSocket, const char *str_port)
         close(serverSocket);
         return (1);
     }
+
+    struct pollfd serv;
+
+    serv.fd = serverSocket;
+    serv.events = POLLIN;
+    serv.revents = 0;
+    clients.push_back(serv);    
 
     logMsg('x', "Waiting for connections...");
     return (0);
