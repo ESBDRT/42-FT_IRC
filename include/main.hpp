@@ -29,10 +29,10 @@ int init_server_socket(std::vector<struct pollfd> &clients, int &serverSocket, c
 // Get a new clientSocket to establish connection
 int init_client_socket(int &serverSocket);
 
-// ----------------------------------|CHECKS|---------------------------------- //
+// ----------------------------------|NETWORK|---------------------------------- //
 
-// Checks if the provided port is valid.
-int check_port_conversion(const char *str_port);
+// 
+void handleEvents(std::vector<struct pollfd> &clients);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
@@ -43,7 +43,10 @@ Log in the proper stream using colors based on a Linux log level style
 
 lvl options (s == SUCCESS | i == INFO | w == WARNING| e = ERROR)
 */
-void logMsg(char lvl, std::string msg);
+void logMsg(char lvl, std::string sender, std::string msg);
 
 // Output the err message passed in parameter in stderr
 void display_err(std::string err);
+
+// Checks if the provided port is valid.
+int check_port_conversion(const char *str_port);

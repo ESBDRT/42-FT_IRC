@@ -13,21 +13,27 @@ static std::string displayTime(){
     return time;
 }
 
-void logMsg(char lvl, std::string msg){
+void logMsg(char lvl, std::string sender, std::string msg){
 
     const char *CLR;
 
     switch (lvl) {
-        case 's': CLR = CLR_GREEN;  break; // SUCCESS
-        case 'i': CLR = CLR_BLUE;   break; // INFO
-        case 'w': CLR = CLR_YELLOW; break; // WARNING
-        case 'e': CLR = CLR_RED;    break; // ERROR
+        case 's': CLR = CLR_GREEN;  break;  // SUCCESS
+        case 'i': CLR = CLR_BLUE;   break;  // INFO
+        case 'w': CLR = CLR_YELLOW; break;  // WARNING
+        case 'e': CLR = CLR_RED;    break;  // ERROR
+        case 'c': CLR = CLR_BLUE;   break;  // CLIENT MESSAGE
         default:  CLR = CLR_RST;    break;
     }
 
     std::ostream& out = (lvl == 'e') ? std::cerr : std::cout;
 
-    out << CLR_BLUE << "[SERVER]" << CLR_RST << displayTime() << CLR << msg << CLR_RST << std::endl;
+    if (lvl == 'c'){
+        out << CLR_BLUE << sender << CLR_RST << displayTime() << msg << CLR_RST;
+        return;
+    }
+
+    out << CLR_BLUE << sender << CLR_RST << displayTime() << CLR << msg << CLR_RST << std::endl;
 }
 
 void display_err(std::string err){

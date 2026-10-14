@@ -1,7 +1,7 @@
 #include "../../include/main.hpp"
 
 int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port){
-    
+
     struct sockaddr_in addr;
 
     serverSocket = -1;
@@ -36,7 +36,7 @@ int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, co
     serv.revents = 0;
     clients.push_back(serv);    
 
-    logMsg('x', "Waiting for connections...");
+    logMsg('x', "[SERVER]", "Waiting for connections...");
     return (0);
 }
 
