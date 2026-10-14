@@ -9,6 +9,7 @@
 #include <climits>
 #include <cstdlib>
 #include <cerrno>
+#include <ctime>
 #include <unistd.h>
 
 
@@ -24,10 +25,15 @@ void display_err(std::string err);
 
 // ----------------------------------|INITS|---------------------------------- //
 
-// Initialize the socket, binds it and start listening
-int init_server_socket(int &mySocket, struct sockaddr_in &addr, const char *str_port);
+// Initialize the server_socket, binds it and start listening
+int init_server_socket(int &serverSocket, int &clientSocket, const char *str_port);
 
 // ----------------------------------|CHECKS|---------------------------------- //
 
-// Validates.
+// Checks if the provided port is valid.
 int check_port_conversion(const char *str_port);
+
+// ----------------------------------|UTILS|---------------------------------- //
+
+// Just read the function name bro
+void displayTime();
