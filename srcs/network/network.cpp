@@ -4,34 +4,20 @@ static int readMsg(int &clientSocket){
 
     char buffer[4096];
 
-    ssize_t bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);          // Read from the socket
+    ssize_t bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);                  // Read from the socket
 
-    if (bytesReceived > 0)                                                          // Succesfully read some bytes
-    {    
-        logMsg('c', "[CLIENT]", std::string(buffer, bytesReceived));
-        return (bytesReceived);
-    }
-    else if (bytesReceived == 0)                                                    // Client disconnected
-    {
-        logMsg('s', "[SERVER]", "Client disconnected");
-        return (0);
-    }
-    else 
-    {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)              // Could not read but non fatal error
-            return (-1);
-        else if (errno == ECONNRESET || errno == ENOTCONN)                          // Connection issues
-            return (logMsg('e', "[SERVER]", "Lost connection to client"), -2);
-        else
-            return (logMsg('e', "[SERVER]", std::strerror(errno)), -3);             // Something went wrong, fatal
-
-    }
+    if (bytesReceived > 0)                                                                      
+    return (logMsg('c', "[CLIENT]", std::string(buffer, bytesReceived)), bytesReceived);    // Succesfully read some bytes
+    else if (bytesReceived == 0)                                                    
+        return (logMsg('s', "[SERVER]", "Client disconnected"), 0);                         // Client disconnected gracefully
+    else
+        return (logMsg('e', "[SERVER]", "Something went wrong... "), -1);                   // Error, something went wrong
 }
 
 void handleEvents(std::vector<struct pollfd> &clients){
 
     size_t i = 0;
-    int pollResult = poll(&clients[0], clients.size(), -1);                         // Check if any events happend
+    int pollResult = poll(&clients[0], clients.size(), -1);                                 // Check if any events happend
     if (pollResult >= 1)
     {
         while (i < clients.size())
@@ -41,7 +27,7 @@ void handleEvents(std::vector<struct pollfd> &clients){
                 continue;
             }
             
-            if (clients[i].fd == clients[0].fd)                                     // Tries to create a clientSocket and accept the connection
+            if (clients[i].fd == clients[0].fd)                                             // Tries to create a clientSocket and accept the connection
             {
                 int clientSocket = init_client_socket(clients[0].fd);
                 if (clientSocket == -1){
@@ -61,11 +47,11 @@ void handleEvents(std::vector<struct pollfd> &clients){
             else 
             {
                 int readResult = readMsg(clients[i].fd);
-                if (readResult == 0 || readResult == -2 || readResult == -3){        // Disconnected gracefully - Connection issues - Fatal error
+                if (readResult == 0 || readResult == -1){                                   // 0 = Disconnected gracefully | -1 = Something went wrong
                     close(clients[i].fd);
                     clients.erase(clients.begin() + i);
                 }
-                else                                                                 // No issues
+                else                                                                    // No issues
                     i++;
             }
         }

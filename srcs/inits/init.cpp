@@ -1,4 +1,17 @@
 #include "../../include/main.hpp"
+#include <fcntl.h>
+
+static int set_nonblocking(int socket){
+
+    int flags = fcntl(socket, F_GETFL, 0);
+    if (flags == -1)
+        return (display_err("fcntl(F_GETFL): " + std::string(std::strerror(errno))), 1);
+
+    if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1)
+        return (display_err("fcntl(F_SETFL): " + std::string(std::strerror(errno))), 1);
+
+    return (0);
+}
 
 int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port){
 
@@ -8,6 +21,12 @@ int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, co
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);                                     // Initialize the socket
     if (serverSocket == -1)
         return (display_err("socket: " + std::string(std::strerror(errno))), 1);
+
+    if (set_nonblocking(serverSocket)){
+        close(serverSocket);
+        serverSocket = -1;
+        return (1);
+    }
 
     int port = check_port_conversion(str_port);
     if (port == -1)
@@ -45,6 +64,10 @@ int init_client_socket(int &serverSocket){
     int clientSocket = accept(serverSocket, NULL, NULL);
     if (clientSocket == -1)
         return (display_err("accept: " + std::string(std::strerror(errno))), -1);
-    else
-        return (clientSocket);
+
+    if (set_nonblocking(clientSocket)){
+        close(clientSocket);
+        return (-1);
+    }
+    return (clientSocket);
 }
