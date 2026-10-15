@@ -14,5 +14,5 @@ int main(int argc, const char **argv){
     while (true)
         handleEvents(clients);
    
-    return (close(serverSocket), 0);
+    return (closeAll(clients), 0);
 }

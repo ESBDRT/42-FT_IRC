@@ -31,7 +31,7 @@ int init_client_socket(int &serverSocket);
 
 // ----------------------------------|NETWORK|---------------------------------- //
 
-// 
+// TODO: Add function description
 void handleEvents(std::vector<struct pollfd> &clients);
 
 // ----------------------------------|UTILS|---------------------------------- //
@@ -48,5 +48,5 @@ void logMsg(char lvl, std::string sender, std::string msg);
 // Output the err message passed in parameter in stderr
 void display_err(std::string err);
 
-// Checks if the provided port is valid.
-int check_port_conversion(const char *str_port);
+// Close server + all clients sockets fds
+void closeAll(std::vector<struct pollfd> &clients);
