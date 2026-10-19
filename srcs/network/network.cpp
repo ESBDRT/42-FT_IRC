@@ -17,7 +17,7 @@ static int readMsg(int &clientSocket){
 bool handleEvents(std::vector<struct pollfd> &clients){
 
     size_t i = 0;
-    int pollResult = poll(&clients[0], clients.size(), 60000);                                  // Check if any events happend
+    int pollResult = poll(&clients[0], clients.size(), -1);                                  // Check if any events happend
     if (pollResult >= 1)
     {
         while (i < clients.size())

@@ -59,12 +59,14 @@ int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, co
     if (bind(serverSocket, (struct sockaddr*)&addr, sizeof(addr)) == -1){               // Bind the ServerSocket to the provided port
         display_err("bind: " + std::string(std::strerror(errno)));
         close(serverSocket);
+        serverSocket = -1;
         return (1);
     }
 
     if (listen(serverSocket, SOMAXCONN) == -1){                                         // Make the serverSocket go into listening state
         display_err("listen: " + std::string(std::strerror(errno)));
         close(serverSocket);
+        serverSocket = -1;
         return (1);
     }
 
