@@ -7,13 +7,13 @@
 
 static int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
 
-    std::string finalmsg = "[";
-    finalmsg += clientData.username;
-    finalmsg += "] ";
-    finalmsg += msg;
-    finalmsg += "\n";
+    std::string formatMsg = "[";
+    formatMsg += clientData.username;
+    formatMsg += "] ";
+    formatMsg += msg;
+    formatMsg += "\n";
 
-    ssize_t bytesSent = send(clientSocket, finalmsg.c_str(), finalmsg.size(), 0);
+    ssize_t bytesSent = send(clientSocket, formatMsg.c_str(), formatMsg.size(), 0);
     
     return (bytesSent == -1 ? 1 : 0); 
 }
