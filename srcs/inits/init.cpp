@@ -33,7 +33,7 @@ static int check_port_conversion(const char *str_port){
     return (port);
 }
 
-int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port){
+int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clientsPolls,int &serverSocket, const char *str_port){
 
     struct sockaddr_in addr;
 
@@ -70,20 +70,25 @@ int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struc
         return (1);
     }
 
-    struct pollfd serv;
+    struct pollfd servPoll;
 
-    serv.fd = serverSocket;
-    serv.events = POLLIN;
-    serv.revents = 0;
-    clients.push_back(serv);
+    servPoll.fd = serverSocket;
+    servPoll.events = POLLIN;
+    servPoll.revents = 0;
+    clientsPolls.push_back(servPoll);
 
     t_clientData servData;
     servData.buffer = "";
-    servData.nickname = "SERVER";
-    servData.poll = serv;
+    servData.username = "SERVER";
+    servData.name = "SERVER";
+    servData.poll = servPoll;
+    servData.hasName = true;
+    servData.hasUsername = true;
+    servData.isRegistered = true;
+    servData.passwordAccepted = true;
     clientsData.push_back(servData);
 
-    logMsg('x', servData.nickname, "Waiting for connections...");
+    logMsg('x', servData.username, "Waiting for connections...");
     return (0);
 }
 

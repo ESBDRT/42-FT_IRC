@@ -24,7 +24,13 @@ typedef struct s_clientData {
 
     struct pollfd   poll;
     std::string     buffer;
-    std::string     nickname;
+    std::string     name;
+    std::string     username;
+    bool hasName;
+    bool hasUsername;
+    bool isRegistered;
+    bool passwordAccepted;
+    
 }              t_clientData;
 
 // ----------------------------------|INITS|---------------------------------- //

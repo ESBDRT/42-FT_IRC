@@ -1,9 +1,14 @@
 #include "../../include/main.hpp"
 
+// static int handleCommands(t_clientData &clientData){
+
+
+// }
+
 static int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
 
     std::string finalmsg = "[";
-    finalmsg += clientData.nickname;
+    finalmsg += clientData.username;
     finalmsg += "] ";
     finalmsg += msg;
     finalmsg += "\n";
@@ -38,7 +43,7 @@ static bool subMsg(t_clientData &clientData, std::string &message)
     return (true);
 }
 
-static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clients, int &clientSocket){
+static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clientsPolls, int &clientSocket){
 
     char tmp[4096];
     std::string msg;
@@ -49,15 +54,15 @@ static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clients
 
         clientData.buffer.append(tmp, bytesReceived);
         while (subMsg(clientData, msg)){
-            broadcastMsg(clientData, clients, clientSocket, msg);     
-            logMsg('c', clientData.nickname, msg);       
+            broadcastMsg(clientData, clientsPolls, clientSocket, msg);     
+            logMsg('c', clientData.username, msg);       
         }
         return (bytesReceived);                                                             // Succesfully read some bytes
     }                                                            
     else if (bytesReceived == 0)                                                    
-        return (logMsg('s', clientData.nickname, "Client disconnected"), 0);                             // Client disconnected gracefully
+        return (logMsg('s', clientData.username, "Client disconnected"), 0);                             // Client disconnected gracefully
     else
-        return (logMsg('e', clientData.nickname, "Something went wrong... "), -1);                       // Error, something went wrong
+        return (logMsg('e', clientData.username, "Something went wrong... "), -1);                       // Error, something went wrong
 }
 
 bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients){
@@ -89,19 +94,24 @@ bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pol
                         continue;
                     }
 
-                    struct pollfd newClient;
-                    newClient.fd = clientSocket;
-                    newClient.events = POLLIN;
-                    newClient.revents = 0;
-                    clients.push_back(newClient);
+                    struct pollfd newClientPoll;
+                    newClientPoll.fd = clientSocket;
+                    newClientPoll.events = POLLIN;
+                    newClientPoll.revents = 0;
+                    clients.push_back(newClientPoll);
 
                     t_clientData newClientData;
-                    newClientData.poll = newClient;
+                    newClientData.poll = newClientPoll;
                     newClientData.buffer = "";
-                    newClientData.nickname = "DEFAULT NAME";
+                    newClientData.username = "User";
+                    newClientData.name = "User";
+                    newClientData.hasName = false;
+                    newClientData.hasUsername = false;
+                    newClientData.passwordAccepted = false;
+                    newClientData.isRegistered = false;
                     clientsData.push_back(newClientData);
 
-                    logMsg('s', clientsData[0].nickname, "New client connected");
+                    logMsg('s', clientsData[0].username, "New client connected");
                 }
                 else 
                 {

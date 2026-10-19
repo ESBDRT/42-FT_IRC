@@ -6,15 +6,15 @@ int main(int argc, const char **argv){
         return (display_err("bad arguments: ./ircserv <port> <password>"), 1);
 
     int serverSocket;
-    std::vector<struct pollfd> clients;
+    std::vector<struct pollfd> clientsPolls;
     std::vector<t_clientData> clientsData;
 
-    if (init_server_socket(clientsData, clients, serverSocket, argv[1]))
+    if (init_server_socket(clientsData, clientsPolls, serverSocket, argv[1]))
         return (1);
 
     while (true)
-        if (!handleEvents(clientsData, clients))
+        if (!handleEvents(clientsData, clientsPolls))
             break;
    
-    return (closeAll(clients), 0);
+    return (closeAll(clientsPolls), 0);
 }
