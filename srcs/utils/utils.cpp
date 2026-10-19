@@ -39,3 +39,11 @@ void logMsg(char lvl, std::string sender, std::string msg){
 void display_err(std::string err){
     std::cerr << CLR_RED << "[ERROR]: " <<  CLR_RST << err << CLR_RST << std::endl;
 }
+
+void closeAll(std::vector<struct pollfd> &clients){
+    
+    for (size_t i = 0; i < clients.size(); i++){
+        if (clients[i].fd >= 0)
+            close(clients[i].fd);
+    }
+}

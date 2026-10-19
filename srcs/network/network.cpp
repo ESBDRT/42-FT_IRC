@@ -1,10 +1,5 @@
 #include "../../include/main.hpp"
 
-// static int handleCommands(t_clientData &clientData){
-
-
-// }
-
 static int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
 
     std::string formatMsg = "[";
@@ -54,6 +49,7 @@ static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clients
 
         clientData.buffer.append(tmp, bytesReceived);
         while (subMsg(clientData, msg)){
+            // Handle commands here
             broadcastMsg(clientData, clientsPolls, clientSocket, msg);     
             logMsg('c', clientData.username, msg);       
         }
