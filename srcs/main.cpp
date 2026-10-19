@@ -12,7 +12,8 @@ int main(int argc, const char **argv){
         return (1);
 
     while (true)
-        handleEvents(clients);
+        if (!handleEvents(clients))
+            break;
    
     return (closeAll(clients), 0);
 }

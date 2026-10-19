@@ -32,7 +32,7 @@ int init_client_socket(int &serverSocket);
 // ----------------------------------|NETWORK|---------------------------------- //
 
 // TODO: Add function description
-void handleEvents(std::vector<struct pollfd> &clients);
+bool handleEvents(std::vector<struct pollfd> &clients);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
