@@ -75,8 +75,6 @@ bool handleEvents(std::vector<struct pollfd> &clients){
             i++;
         }
     }
-    else if (pollResult == 0)
-        return (logMsg('e', "[SERVER]", "Timed out, no sockets ready. Shutting down server"), false);
     else if (pollResult == -1)
     {
         if (errno == EINTR)
