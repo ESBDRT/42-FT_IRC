@@ -6,6 +6,7 @@ static int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg)
     finalmsg += clientData.nickname;
     finalmsg += "] ";
     finalmsg += msg;
+    finalmsg += "\n";
 
     ssize_t bytesSent = send(clientSocket, finalmsg.c_str(), finalmsg.size(), 0);
     
@@ -25,15 +26,33 @@ static int broadcastMsg(t_clientData &clientData, std::vector<struct pollfd> &cl
     return (0);
 }
 
+static bool subMsg(t_clientData &clientData, std::string &message)
+{
+    std::string::size_type pos = clientData.buffer.find("\r\n");
+
+    if (pos == std::string::npos)
+        return (false);
+        
+    message = clientData.buffer.substr(0, pos);
+    clientData.buffer.erase(0, pos + 2);
+    return (true);
+}
+
 static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clients, int &clientSocket){
 
-    char buffer[4096];
+    char tmp[4096];
+    std::string msg;
 
-    ssize_t bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);                      // Read from the socket
+    ssize_t bytesReceived = recv(clientSocket, &tmp, sizeof(tmp), 0);                      // Read from the socket
 
     if (bytesReceived > 0){
-        broadcastMsg(clientData, clients, clientSocket, std::string(buffer, bytesReceived));
-        return (logMsg('c', clientData.nickname, std::string(buffer, bytesReceived)), bytesReceived);    // Succesfully read some bytes
+
+        clientData.buffer.append(tmp, bytesReceived);
+        while (subMsg(clientData, msg)){
+            broadcastMsg(clientData, clients, clientSocket, msg);     
+            logMsg('c', clientData.nickname, msg);       
+        }
+        return (bytesReceived);                                                             // Succesfully read some bytes
     }                                                            
     else if (bytesReceived == 0)                                                    
         return (logMsg('s', clientData.nickname, "Client disconnected"), 0);                             // Client disconnected gracefully

@@ -29,11 +29,11 @@ void logMsg(char lvl, std::string sender, std::string msg){
     std::ostream& out = (lvl == 'e') ? std::cerr : std::cout;
 
     if (lvl == 'c'){
-        out << CLR_BLUE << sender << CLR_RST << displayTime() << msg << CLR_RST;
+        out << "[" << CLR_BLUE << sender << "]" << CLR_RST << displayTime() << msg << CLR_RST << std::endl;
         return;
     }
 
-    out << CLR_BLUE << sender << CLR_RST << displayTime() << CLR << msg << CLR_RST << std::endl;
+    out << "[" << CLR_BLUE << sender << "]" << CLR_RST << displayTime() << CLR << msg << CLR_RST << std::endl;
 }
 
 void display_err(std::string err){
