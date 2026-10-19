@@ -7,12 +7,13 @@ int main(int argc, const char **argv){
 
     int serverSocket;
     std::vector<struct pollfd> clients;
+    std::vector<t_clientData> clientsData;
 
-    if (init_server_socket(clients, serverSocket, argv[1]))
+    if (init_server_socket(clientsData, clients, serverSocket, argv[1]))
         return (1);
 
     while (true)
-        if (!handleEvents(clients))
+        if (!handleEvents(clientsData, clients))
             break;
    
     return (closeAll(clients), 0);

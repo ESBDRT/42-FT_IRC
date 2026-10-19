@@ -1,42 +1,47 @@
 #include "../../include/main.hpp"
 
-static int sendMsg(int &clientSocket, std::string msg){
-    
-    ssize_t bytesSent = send(clientSocket, msg.c_str(), msg.size(), 0);
+static int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
+
+    std::string finalmsg = "[";
+    finalmsg += clientData.nickname;
+    finalmsg += "] ";
+    finalmsg += msg;
+
+    ssize_t bytesSent = send(clientSocket, finalmsg.c_str(), finalmsg.size(), 0);
     
     return (bytesSent == -1 ? 1 : 0); 
 }
 
-static int broadcastMsg(std::vector<struct pollfd> &clients, int &clientSocket, std::string msg){
+static int broadcastMsg(t_clientData &clientData, std::vector<struct pollfd> &clients, int &clientSocket, std::string msg){
 
     for (size_t i = 1; i < clients.size(); i++)
     {
         if (clients[i].fd == clientSocket)
             continue;
             
-        sendMsg(clients[i].fd, msg);
+        sendMsg(clientData, clients[i].fd, msg);
     }
     
     return (0);
 }
 
-static int readMsg(std::vector<struct pollfd> &clients, int &clientSocket){
+static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clients, int &clientSocket){
 
     char buffer[4096];
 
     ssize_t bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);                      // Read from the socket
 
     if (bytesReceived > 0){
-        broadcastMsg(clients, clientSocket, std::string(buffer, bytesReceived));
-        return (logMsg('c', "[CLIENT]", std::string(buffer, bytesReceived)), bytesReceived);    // Succesfully read some bytes
+        broadcastMsg(clientData, clients, clientSocket, std::string(buffer, bytesReceived));
+        return (logMsg('c', clientData.nickname, std::string(buffer, bytesReceived)), bytesReceived);    // Succesfully read some bytes
     }                                                            
     else if (bytesReceived == 0)                                                    
-        return (logMsg('s', "[SERVER]", "Client disconnected"), 0);                             // Client disconnected gracefully
+        return (logMsg('s', clientData.nickname, "Client disconnected"), 0);                             // Client disconnected gracefully
     else
-        return (logMsg('e', "[SERVER]", "Something went wrong... "), -1);                       // Error, something went wrong
+        return (logMsg('e', clientData.nickname, "Something went wrong... "), -1);                       // Error, something went wrong
 }
 
-bool handleEvents(std::vector<struct pollfd> &clients){
+bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients){
 
     size_t i = 0;
     int pollResult = poll(&clients[0], clients.size(), -1);                                  // Check if any events happend
@@ -51,6 +56,7 @@ bool handleEvents(std::vector<struct pollfd> &clients){
                     return (false);
 
                 clients.erase(clients.begin() + i);
+                clientsData.erase(clientsData.begin() + i);
                 continue;
             }
 
@@ -70,14 +76,21 @@ bool handleEvents(std::vector<struct pollfd> &clients){
                     newClient.revents = 0;
                     clients.push_back(newClient);
 
-                    logMsg('s', "[SERVER]", "New client connected");
+                    t_clientData newClientData;
+                    newClientData.poll = newClient;
+                    newClientData.buffer = "";
+                    newClientData.nickname = "DEFAULT NAME";
+                    clientsData.push_back(newClientData);
+
+                    logMsg('s', clientsData[0].nickname, "New client connected");
                 }
                 else 
                 {
-                    int readResult = readMsg(clients, clients[i].fd);
+                    int readResult = readMsg(clientsData[i], clients, clients[i].fd);
                     if (readResult == 0 || readResult == -1){                                   // 0 = Disconnected gracefully | -1 = Something went wrong
                         close(clients[i].fd);
                         clients.erase(clients.begin() + i);
+                        clientsData.erase(clientsData.begin() + i);
                         continue;
                     }
                 }
@@ -91,6 +104,7 @@ bool handleEvents(std::vector<struct pollfd> &clients){
                 logMsg('e', "[SERVER]", "Client hangup or socket error");
                 close(clients[i].fd);
                 clients.erase(clients.begin() + i);
+                clientsData.erase(clientsData.begin() + i);
                 continue;
             }
 

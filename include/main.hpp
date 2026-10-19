@@ -14,17 +14,23 @@
 #include <vector>
 #include <poll.h>
 
-
 #define CLR_GREEN   "\033[38;5;46m"
 #define CLR_RED     "\033[38;2;255;0;0m"
 #define CLR_BLUE    "\033[38;2;0;157;255m"
 #define CLR_YELLOW  "\033[38;2;255;255;0m"
 #define CLR_RST     "\033[0m"
 
+typedef struct s_clientData {
+
+    struct pollfd   poll;
+    std::string     buffer;
+    std::string     nickname;
+}              t_clientData;
+
 // ----------------------------------|INITS|---------------------------------- //
 
 // Initialize the server_socket, binds it and start listening
-int init_server_socket(std::vector<struct pollfd> &clients, int &serverSocket, const char *str_port);
+int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port);
 
 // Get a new clientSocket to establish connection
 int init_client_socket(int &serverSocket);
@@ -32,7 +38,7 @@ int init_client_socket(int &serverSocket);
 // ----------------------------------|NETWORK|---------------------------------- //
 
 // TODO: Add function description
-bool handleEvents(std::vector<struct pollfd> &clients);
+bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients);
 
 // ----------------------------------|UTILS|---------------------------------- //
 

@@ -33,7 +33,7 @@ static int check_port_conversion(const char *str_port){
     return (port);
 }
 
-int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port){
+int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients,int &serverSocket, const char *str_port){
 
     struct sockaddr_in addr;
 
@@ -75,9 +75,15 @@ int init_server_socket(std::vector<struct pollfd> &clients,int &serverSocket, co
     serv.fd = serverSocket;
     serv.events = POLLIN;
     serv.revents = 0;
-    clients.push_back(serv);    
+    clients.push_back(serv);
 
-    logMsg('x', "[SERVER]", "Waiting for connections...");
+    t_clientData servData;
+    servData.buffer = "";
+    servData.nickname = "SERVER";
+    servData.poll = serv;
+    clientsData.push_back(servData);
+
+    logMsg('x', servData.nickname, "Waiting for connections...");
     return (0);
 }
 
