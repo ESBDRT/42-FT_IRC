@@ -1,13 +1,35 @@
 #include "../../include/main.hpp"
 
-static int readMsg(int &clientSocket){
+static int sendMsg(int &clientSocket, std::string msg){
+    
+    ssize_t bytesSent = send(clientSocket, msg.c_str(), msg.size(), 0);
+    
+    return (bytesSent == -1 ? 1 : 0); 
+}
+
+static int broadcastMsg(std::vector<struct pollfd> &clients, int &clientSocket, std::string msg){
+
+    for (size_t i = 1; i < clients.size(); i++)
+    {
+        if (clients[i].fd == clientSocket)
+            continue;
+            
+        sendMsg(clients[i].fd, msg);
+    }
+    
+    return (0);
+}
+
+static int readMsg(std::vector<struct pollfd> &clients, int &clientSocket){
 
     char buffer[4096];
 
     ssize_t bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);                      // Read from the socket
 
-    if (bytesReceived > 0)                                                                      
+    if (bytesReceived > 0){
+        broadcastMsg(clients, clientSocket, std::string(buffer, bytesReceived));
         return (logMsg('c', "[CLIENT]", std::string(buffer, bytesReceived)), bytesReceived);    // Succesfully read some bytes
+    }                                                            
     else if (bytesReceived == 0)                                                    
         return (logMsg('s', "[SERVER]", "Client disconnected"), 0);                             // Client disconnected gracefully
     else
@@ -52,7 +74,7 @@ bool handleEvents(std::vector<struct pollfd> &clients){
                 }
                 else 
                 {
-                    int readResult = readMsg(clients[i].fd);
+                    int readResult = readMsg(clients, clients[i].fd);
                     if (readResult == 0 || readResult == -1){                                   // 0 = Disconnected gracefully | -1 = Something went wrong
                         close(clients[i].fd);
                         clients.erase(clients.begin() + i);
