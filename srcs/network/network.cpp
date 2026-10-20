@@ -105,6 +105,7 @@ bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pol
                     newClientData.hasUsername = false;
                     newClientData.passwordAccepted = false;
                     newClientData.isRegistered = false;
+                    newClientData.isOperator = false;
                     clientsData.push_back(newClientData);
 
                     logMsg('s', clientsData[0].username, "New client connected");

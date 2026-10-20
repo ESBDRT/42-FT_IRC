@@ -86,6 +86,7 @@ int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struc
     servData.hasUsername = true;
     servData.isRegistered = true;
     servData.passwordAccepted = true;
+    servData.isOperator = true;
     clientsData.push_back(servData);
 
     logMsg('x', servData.username, "Waiting for connections...");

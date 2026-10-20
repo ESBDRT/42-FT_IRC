@@ -5,6 +5,9 @@ int main(int argc, const char **argv){
     if (argc != 3)
         return (display_err("bad arguments: ./ircserv <port> <password>"), 1);
 
+    server server;
+    
+
     int serverSocket;
     std::vector<struct pollfd> clientsPolls;
     std::vector<t_clientData> clientsData;

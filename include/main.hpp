@@ -1,6 +1,9 @@
 #pragma once
 
+// ----------------------------------|INCLUDES|---------------------------------- //
+
 #include <iostream>
+#include <sstream>
 #include <cstring>
 #include <string>
 #include <sys/socket.h>
@@ -14,11 +17,15 @@
 #include <vector>
 #include <poll.h>
 
+// ----------------------------------|DEFINES|---------------------------------- //
+
 #define CLR_GREEN   "\033[38;5;46m"
 #define CLR_RED     "\033[38;2;255;0;0m"
 #define CLR_BLUE    "\033[38;2;0;157;255m"
 #define CLR_YELLOW  "\033[38;2;255;255;0m"
 #define CLR_RST     "\033[0m"
+
+// ----------------------------------|STRUCTS|---------------------------------- //
 
 typedef struct s_clientData {
 
@@ -28,10 +35,38 @@ typedef struct s_clientData {
     std::string     username;
     bool hasName;
     bool hasUsername;
-    bool isRegistered;
     bool passwordAccepted;
+    bool isRegistered;
+    bool isOperator;
     
 }              t_clientData;
+
+// ----------------------------------|CLASSES|---------------------------------- //
+
+class server {
+    private:
+        std::string _password;
+        int _socket;
+        int port;
+    public:
+        server();
+        ~server();
+
+        void setPassword(std::string input);
+        bool checkPassword(std::string input);
+};
+
+server::server(){};
+server::~server(){};
+
+void server::setPassword(std::string input){
+    this->_password = input;
+}
+
+bool server::checkPassword(std::string input){
+    return (input == this->_password ? true : false);
+}
+
 
 // ----------------------------------|INITS|---------------------------------- //
 
@@ -43,16 +78,13 @@ int init_client_socket(int &serverSocket);
 
 // ----------------------------------|NETWORK|---------------------------------- //
 
-// TODO: Add function description
+// Hamdle the different IRC features provided by the subject
 bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
 /*
-This function is meant to be used only when the log is related to the IRC
-
 Log in the proper stream using colors based on a Linux log level style
-
 lvl options (s == SUCCESS | i == INFO | w == WARNING| e = ERROR)
 */
 void logMsg(char lvl, std::string sender, std::string msg);
