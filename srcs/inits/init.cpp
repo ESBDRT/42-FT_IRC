@@ -89,7 +89,7 @@ int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struc
     servData.isOperator = true;
     clientsData.push_back(servData);
 
-    logMsg('x', servData.username, "Waiting for connections...");
+    logMsg('i', "Waiting for connections", "");
     return (0);
 }
 

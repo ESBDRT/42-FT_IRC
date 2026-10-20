@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <vector>
 #include <poll.h>
+#include "serverClass.hpp"
 
 // ----------------------------------|DEFINES|---------------------------------- //
 
@@ -41,33 +42,6 @@ typedef struct s_clientData {
     
 }              t_clientData;
 
-// ----------------------------------|CLASSES|---------------------------------- //
-
-class server {
-    private:
-        std::string _password;
-        int _socket;
-        int port;
-    public:
-        server();
-        ~server();
-
-        void setPassword(std::string input);
-        bool checkPassword(std::string input);
-};
-
-server::server(){};
-server::~server(){};
-
-void server::setPassword(std::string input){
-    this->_password = input;
-}
-
-bool server::checkPassword(std::string input){
-    return (input == this->_password ? true : false);
-}
-
-
 // ----------------------------------|INITS|---------------------------------- //
 
 // Initialize the server_socket, binds it and start listening
@@ -79,7 +53,10 @@ int init_client_socket(int &serverSocket);
 // ----------------------------------|NETWORK|---------------------------------- //
 
 // Hamdle the different IRC features provided by the subject
-bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients);
+bool handleEvents(server &server, std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients);
+
+
+int handleCommands(server &server, t_clientData &clientData, std::string cmd);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
@@ -87,7 +64,9 @@ bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pol
 Log in the proper stream using colors based on a Linux log level style
 lvl options (s == SUCCESS | i == INFO | w == WARNING| e = ERROR)
 */
-void logMsg(char lvl, std::string sender, std::string msg);
+void logMsg(char lvl, std::string msg, std::string arg);
+
+void logUserMsg(std::string user, std::string msg);
 
 // Output the err message passed in parameter in stderr
 void display_err(std::string err);

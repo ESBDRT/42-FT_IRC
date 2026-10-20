@@ -38,7 +38,7 @@ static bool subMsg(t_clientData &clientData, std::string &message)
     return (true);
 }
 
-static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clientsPolls, int &clientSocket){
+static int readMsg(server &server, t_clientData &clientData, std::vector<struct pollfd> &clientsPolls, int &clientSocket){
 
     char tmp[4096];
     std::string msg;
@@ -49,19 +49,26 @@ static int readMsg(t_clientData &clientData, std::vector<struct pollfd> &clients
 
         clientData.buffer.append(tmp, bytesReceived);
         while (subMsg(clientData, msg)){
-            // Handle commands here
-            broadcastMsg(clientData, clientsPolls, clientSocket, msg);     
-            logMsg('c', clientData.username, msg);       
+            int handleCommandsResult = handleCommands(server, clientData, msg);
+            if (handleCommandsResult == 0)
+                return (2);
+            else if (handleCommandsResult == 1)
+                return (2);
+            else 
+            {
+                broadcastMsg(clientData, clientsPolls, clientSocket, msg);     
+                logUserMsg(clientData.username, msg);
+            }
         }
         return (bytesReceived);                                                             // Succesfully read some bytes
     }                                                            
     else if (bytesReceived == 0)                                                    
-        return (logMsg('s', clientData.username, "Client disconnected"), 0);                             // Client disconnected gracefully
+        return (logMsg('i', "Client disconnected:", clientData.username), 0);               // Client disconnected gracefully
     else
-        return (logMsg('e', clientData.username, "Something went wrong... "), -1);                       // Error, something went wrong
+        return (logMsg('e', "Something went wrong..", ""), -1);                             // Error, something went wrong
 }
 
-bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients){
+bool handleEvents(server &server, std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clients){
 
     size_t i = 0;
     int pollResult = poll(&clients[0], clients.size(), -1);                                  // Check if any events happend
@@ -108,12 +115,12 @@ bool handleEvents(std::vector<t_clientData> &clientsData, std::vector<struct pol
                     newClientData.isOperator = false;
                     clientsData.push_back(newClientData);
 
-                    logMsg('s', clientsData[0].username, "New client connected");
+                    logMsg('i', "New client connected:", newClientData.username);
                 }
                 else 
                 {
-                    int readResult = readMsg(clientsData[i], clients, clients[i].fd);
-                    if (readResult == 0 || readResult == -1){                                   // 0 = Disconnected gracefully | -1 = Something went wrong
+                    int readResult = readMsg(server, clientsData[i], clients, clients[i].fd);
+                    if (readResult == 0 || readResult == -1){                                       // 0 = Disconnected gracefully | -1 = Something went wrong
                         close(clients[i].fd);
                         clients.erase(clients.begin() + i);
                         clientsData.erase(clientsData.begin() + i);

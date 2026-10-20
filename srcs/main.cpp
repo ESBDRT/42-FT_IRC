@@ -5,8 +5,8 @@ int main(int argc, const char **argv){
     if (argc != 3)
         return (display_err("bad arguments: ./ircserv <port> <password>"), 1);
 
-    server server;
-    
+    server serverObj;
+    serverObj.setPassword(std::string(argv[2]));
 
     int serverSocket;
     std::vector<struct pollfd> clientsPolls;
@@ -16,7 +16,7 @@ int main(int argc, const char **argv){
         return (1);
 
     while (true)
-        if (!handleEvents(clientsData, clientsPolls))
+        if (!handleEvents(serverObj, clientsData, clientsPolls))
             break;
    
     return (closeAll(clientsPolls), 0);

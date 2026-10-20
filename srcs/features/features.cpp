@@ -1,9 +1,13 @@
 #include "../../include/main.hpp"
 
-// CHecker le nombre d'argument specifique a la tokens[0]
-
-static int handlePASS (t_clientData &clientData, std::vector<std::string> tokens){
-
+static int handlePASS (server &server, t_clientData &clientData, std::vector<std::string> tokens){
+    if (server.checkPassword(tokens[1])){
+        clientData.passwordAccepted = true;
+        logMsg('i', "Password accepted for client:", clientData.username);
+        return (0);
+    }
+    else
+        return (logMsg('e', "Invalid password for client:", clientData.username), 1);
 }
 
 static int handleNICK (){
@@ -38,8 +42,7 @@ static int handleMODE (){
     return (0);
 }
 
-int handleCommands(t_clientData &clientData, std::string cmd){
-
+int handleCommands(server &server, t_clientData &clientData, std::string cmd){
 
     std::istringstream iss(cmd);
     std::string token;
@@ -48,9 +51,9 @@ int handleCommands(t_clientData &clientData, std::string cmd){
     while (iss >> token)
         tokens.push_back(token);
 
-    if (tokens[0] == "PASS")
-        return (handlePASS(clientData, tokens));        
-    else if (tokens[0] == "NICK")
+    if (tokens[0] == "PASS" && tokens.size() == 2)
+        return (handlePASS(server, clientData, tokens));        
+    else if (tokens[0] == "NICK" && tokens.size() == 2 && clientData.passwordAccepted)
         return (handleNICK());
     else if (tokens[0] == "USER")
         return (handleUSER());
@@ -69,7 +72,6 @@ int handleCommands(t_clientData &clientData, std::string cmd){
     else
         return (-1);
 
-    // return (-1) = no tokens[0] found
     // return (0) == success
-    // return (> 0) == failure
+    // return (1) == failure
 }

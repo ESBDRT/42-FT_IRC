@@ -13,31 +13,46 @@ static std::string displayTime(){
     return time;
 }
 
-void logMsg(char lvl, std::string sender, std::string msg){
+void logUserMsg(std::string user, std::string msg){
+    std::cout << "[" << CLR_GREEN << user << CLR_RST << "]" << displayTime() << msg << std::endl; 
+}
 
+void logMsg(char lvl, std::string msg, std::string arg){
+    
     const char *CLR;
+    const char *LEVEL;
 
     switch (lvl) {
-        case 's': CLR = CLR_GREEN;  break;  // SUCCESS
-        case 'i': CLR = CLR_BLUE;   break;  // INFO
-        case 'w': CLR = CLR_YELLOW; break;  // WARNING
-        case 'e': CLR = CLR_RED;    break;  // ERROR
-        case 'c': CLR = CLR_BLUE;   break;  // CLIENT MESSAGE
-        default:  CLR = CLR_RST;    break;
+        case 'i':
+            CLR = CLR_BLUE;
+            LEVEL = "INFO";
+            break;
+        case 'w':
+            CLR = CLR_YELLOW;
+            LEVEL = "WARNING";
+            break;
+        case 'e':
+            CLR = CLR_RED;
+            LEVEL = "ERROR";
+            break;
+        case 'c':
+            CLR = CLR_GREEN;
+            LEVEL = "CLIENT";
+            break;
+        default:
+            CLR = CLR_RST;
+            LEVEL = "LOG";
+            break;
     }
 
     std::ostream& out = (lvl == 'e') ? std::cerr : std::cout;
 
-    if (lvl == 'c'){
-        out << "[" << CLR_BLUE << sender << "]" << CLR_RST << displayTime() << msg << CLR_RST << std::endl;
-        return;
-    }
+    out << "[" << CLR << LEVEL << CLR_RST << "]" << displayTime() << msg << CLR_RST;
 
-    out << "[" << CLR_BLUE << sender << "]" << CLR_RST << displayTime() << CLR << msg << CLR_RST << std::endl;
-}
+    if (!arg.empty())
+        out << " " << CLR << arg << CLR_RST;
 
-void display_err(std::string err){
-    std::cerr << CLR_RED << "[ERROR]: " <<  CLR_RST << err << CLR_RST << std::endl;
+    out << std::endl;
 }
 
 void closeAll(std::vector<struct pollfd> &clients){
@@ -46,4 +61,8 @@ void closeAll(std::vector<struct pollfd> &clients){
         if (clients[i].fd >= 0)
             close(clients[i].fd);
     }
+}
+
+void display_err(std::string err){
+    std::cerr << CLR_RED << "[ERROR]: " <<  CLR_RST << err << CLR_RST << std::endl;
 }

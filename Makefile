@@ -1,7 +1,7 @@
 C++ = c++
 CCFLAGS = -Wall -Wextra -Werror -std=c++98
 NAME = ircserv
-SRCS = srcs/main.cpp srcs/inits/init.cpp srcs/utils/utils.cpp srcs/network/network.cpp
+SRCS = srcs/main.cpp srcs/classes/serverClass.cpp srcs/inits/init.cpp srcs/utils/utils.cpp srcs/network/network.cpp srcs/features/features.cpp
 OBJECTS = $(SRCS:.cpp=.o)
 
 CLR_GREEN=\033[38;5;46m
