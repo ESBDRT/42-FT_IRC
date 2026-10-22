@@ -1,48 +1,74 @@
 #include "../../include/main.hpp"
 
-static int handlePASS (server &server, t_clientData &clientData, std::vector<std::string> tokens){
+static void handlePASS (server &server, t_clientData &clientData, std::vector<std::string> tokens){
     if (server.checkPassword(tokens[1])){
         clientData.passwordAccepted = true;
         logMsg('i', "Password accepted for client:", clientData.username);
-        return (0);
     }
     else
-        return (logMsg('e', "Invalid password for client:", clientData.username), 1);
+        logMsg('e', "Invalid password provided by client:", clientData.username);
 }
 
-static int handleNICK (){
-    return (0);
+static void handleNICK (t_clientData &clientData, std::vector<std::string> tokens){
+    std::string msg = "Name: ";
+    msg += clientData.name;
+    msg += " changed to:";
+    clientData.name = tokens[1];
+    clientData.hasName = true;
+    logMsg('i', msg, clientData.name);
 }
 
-static int handleUSER (){
-    return (0);
+static void handleUSER (t_clientData &clientData, std::vector<std::string> tokens){
+    std::string fullName;
+    std::string msg;
+    
+    size_t i = 4;
+
+    while (i < tokens.size())
+    {
+        if (!tokens[i].empty() && tokens[i][0] == ':')
+            tokens[i].erase(0, 1);
+
+        fullName += tokens[i++];
+
+        if (i < tokens.size())
+            fullName += ' ';
+    }
+
+    handleNICK(clientData, tokens);
+    msg += "Username: ";
+    msg += clientData.username;
+    msg += " changed to:";
+    clientData.username = fullName;
+
+    logMsg('i', msg, clientData.username);
 }
 
-static int handleJOIN (){
-    return (0);
+static void handleJOIN (){
+    
 }
 
-static int handlePRIVMSG (){
-    return (0);
+static void handlePRIVMSG (){
+
+}   
+
+static void handleKICK (){
+
 }
 
-static int handleKICK (){
-    return (0);
+static void handleINVITE (){
+
 }
 
-static int handleINVITE (){
-    return (0);
+static void handleTOPIC (){
+
 }
 
-static int handleTOPIC (){
-    return (0);
+static void handleMODE (){
+
 }
 
-static int handleMODE (){
-    return (0);
-}
-
-int handleCommands(server &server, t_clientData &clientData, std::string cmd){
+bool handleCommands(server &server, t_clientData &clientData, std::string cmd){
 
     std::istringstream iss(cmd);
     std::string token;
@@ -51,27 +77,28 @@ int handleCommands(server &server, t_clientData &clientData, std::string cmd){
     while (iss >> token)
         tokens.push_back(token);
 
-    if (tokens[0] == "PASS" && tokens.size() == 2)
-        return (handlePASS(server, clientData, tokens));        
-    else if (tokens[0] == "NICK" && tokens.size() == 2 && clientData.passwordAccepted)
-        return (handleNICK());
-    else if (tokens[0] == "USER")
-        return (handleUSER());
-    else if (tokens[0] == "JOIN")
-        return (handleJOIN());
-    else if (tokens[0] == "PRIVMSG")
-        return (handlePRIVMSG());
-    else if (tokens[0] == "KICK")
-        return (handleKICK());
-    else if (tokens[0] == "INVITE")
-        return (handleINVITE());
-    else if (tokens[0] == "TOPIC")
-        return (handleTOPIC());
-    else if (tokens[0] == "MODE")
-        return (handleMODE());
-    else
-        return (-1);
-
-    // return (0) == success
-    // return (1) == failure
+    if (tokens.size() > 0)
+    {
+        if (tokens[0] == "PASS" && tokens.size() == 2)
+            handlePASS(server, clientData, tokens);        
+        else if (tokens[0] == "NICK" && tokens.size() == 2)
+            handleNICK(clientData, tokens);
+        else if (tokens[0] == "USER" && tokens.size() >= 5)
+            handleUSER(clientData, tokens);
+        else if (tokens[0] == "JOIN")
+            handleJOIN();
+        else if (tokens[0] == "PRIVMSG")
+            handlePRIVMSG();
+        else if (tokens[0] == "KICK")
+            handleKICK();
+        else if (tokens[0] == "INVITE")
+            handleINVITE();
+        else if (tokens[0] == "TOPIC")
+            handleTOPIC();
+        else if (tokens[0] == "MODE")
+            handleMODE();
+        
+        return (true);
+    }
+    return (false);
 }

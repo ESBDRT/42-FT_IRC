@@ -33,24 +33,24 @@ static int check_port_conversion(const char *str_port){
     return (port);
 }
 
-int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struct pollfd> &clientsPolls,int &serverSocket, const char *str_port){
+bool server::initialize(const char *str_port, const std::string &password){
+
+    setPassword(password);
 
     struct sockaddr_in addr;
 
-    serverSocket = -1;
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);                                     // Initialize the socket
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);                                 // Initialize the socket
     if (serverSocket == -1)
-        return (display_err("socket: " + std::string(std::strerror(errno))), 1);
+        return (display_err("socket: " + std::string(std::strerror(errno))), false);
 
     if (set_nonblocking(serverSocket)){
         close(serverSocket);
-        serverSocket = -1;
-        return (1);
+        return (false);
     }
 
     int port = check_port_conversion(str_port);
     if (port == -1)
-        return (close(serverSocket), 1);
+        return (close(serverSocket), false);
 
     addr.sin_family = AF_INET;                                                          // Which address family/type are you using (ipv4, v6, etc..)
     addr.sin_port = htons(port);                                                        // On which port is the socket listening
@@ -59,15 +59,13 @@ int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struc
     if (bind(serverSocket, (struct sockaddr*)&addr, sizeof(addr)) == -1){               // Bind the ServerSocket to the provided port
         display_err("bind: " + std::string(std::strerror(errno)));
         close(serverSocket);
-        serverSocket = -1;
-        return (1);
+        return (false);
     }
 
     if (listen(serverSocket, SOMAXCONN) == -1){                                         // Make the serverSocket go into listening state
         display_err("listen: " + std::string(std::strerror(errno)));
         close(serverSocket);
-        serverSocket = -1;
-        return (1);
+        return (false);
     }
 
     struct pollfd servPoll;
@@ -75,8 +73,6 @@ int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struc
     servPoll.fd = serverSocket;
     servPoll.events = POLLIN;
     servPoll.revents = 0;
-    clientsPolls.push_back(servPoll);
-
     t_clientData servData;
     servData.buffer = "";
     servData.username = "SERVER";
@@ -87,10 +83,10 @@ int init_server_socket(std::vector<t_clientData> &clientsData, std::vector<struc
     servData.isRegistered = true;
     servData.passwordAccepted = true;
     servData.isOperator = true;
-    clientsData.push_back(servData);
+    _clients.push_back(servData);
 
     logMsg('i', "Waiting for connections", "");
-    return (0);
+    return (true);
 }
 
 int init_client_socket(int &serverSocket){
