@@ -1,5 +1,16 @@
 #include "../../include/main.hpp"
 
+static void checkToggleRegistration(t_clientData &clientData){
+    
+    if (clientData.isRegistered)
+        return;
+    else if (clientData.hasUsername && clientData.hasName && clientData.passwordAccepted){
+        clientData.isRegistered = true;
+        logMsg('i', std::string (clientData.username + " is now registered."), "");
+    }
+    
+}
+
 static void handlePASS (server &server, t_clientData &clientData, std::vector<std::string> tokens){
     if (server.checkPassword(tokens[1])){
         clientData.passwordAccepted = true;
@@ -10,20 +21,23 @@ static void handlePASS (server &server, t_clientData &clientData, std::vector<st
 }
 
 static void handleNICK (t_clientData &clientData, std::vector<std::string> tokens){
-    std::string msg = "Name: ";
-    msg += clientData.name;
-    msg += " changed to:";
-    clientData.name = tokens[1];
-    clientData.hasName = true;
-    logMsg('i', msg, clientData.name);
+    
+    if (clientData.username == tokens[1])
+        return;
+
+    std::string msg = "Username: " + clientData.username + " changed to:";
+    clientData.username = tokens[1];
+    clientData.hasUsername = true;
+    
+    logMsg('i', msg, clientData.username);
+
+    checkToggleRegistration(clientData);
 }
 
 static void handleUSER (t_clientData &clientData, std::vector<std::string> tokens){
-    std::string fullName;
-    std::string msg;
     
+    std::string fullName;
     size_t i = 4;
-
     while (i < tokens.size())
     {
         if (!tokens[i].empty() && tokens[i][0] == ':')
@@ -36,39 +50,66 @@ static void handleUSER (t_clientData &clientData, std::vector<std::string> token
     }
 
     handleNICK(clientData, tokens);
-    msg += "Username: ";
-    msg += clientData.username;
-    msg += " changed to:";
-    clientData.username = fullName;
 
-    logMsg('i', msg, clientData.username);
+    std::string msg = "Name: " + clientData.name + " changed to:";
+    clientData.name = fullName;
+    clientData.hasName = true;
+
+    logMsg('i', msg, clientData.name);
+    checkToggleRegistration(clientData);
 }
 
-static void handleJOIN (){
-    
-}
+// static void handleJOIN (t_clientData &clientData, std::vector<std::string> tokens){
+//     if (!clientData.isRegistered){
+//         logMsg('e', std::string (clientData.username + " must be registered to join channels"), "");
+//         return;
+//     }
+// }
 
-static void handlePRIVMSG (){
+static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector<std::string> tokens){
 
+    if (!clientData.isRegistered){
+        logMsg('e', std::string (clientData.username + " must be registered to send messages"), "");
+        return;
+    }
+
+    // #TODO: Make the function also search for channels with the same name
+    int contactSocket = server.getContactSocket(tokens[1]);
+    if (contactSocket == -1){
+        logMsg('e', std::string (clientData.username + " tried to send a message but could not reach: " + tokens[1]), "");
+        return;
+    }
+
+    if (!tokens[0].empty() && tokens[0][0] == '#')
+            tokens[0].erase(0, 1);
+
+    std::string msg;
+    for (size_t i = 2; i < tokens.size(); i++)
+        msg += tokens[i] + '\n';
+
+    if (sendMsg(clientData, contactSocket, msg)){
+        logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");
+        return ;
+    }
 }   
 
-static void handleKICK (){
+// static void handleKICK (t_clientData &clientData, std::vector<std::string> tokens){
 
-}
+// }
 
-static void handleINVITE (){
+// static void handleINVITE (t_clientData &clientData, std::vector<std::string> tokens){
 
-}
+// }
 
-static void handleTOPIC (){
+// static void handleTOPIC (t_clientData &clientData, std::vector<std::string> tokens){
 
-}
+// }
 
-static void handleMODE (){
+// static void handleMODE (t_clientData &clientData, std::vector<std::string> tokens){
 
-}
+// }
 
-bool handleCommands(server &server, t_clientData &clientData, std::string cmd){
+void handleCommands(server &server, t_clientData &clientData, std::string cmd){
 
     std::istringstream iss(cmd);
     std::string token;
@@ -85,20 +126,18 @@ bool handleCommands(server &server, t_clientData &clientData, std::string cmd){
             handleNICK(clientData, tokens);
         else if (tokens[0] == "USER" && tokens.size() >= 5)
             handleUSER(clientData, tokens);
-        else if (tokens[0] == "JOIN")
-            handleJOIN();
+        // else if (tokens[0] == "JOIN")
+        //     handleJOIN(clientData, tokens);
         else if (tokens[0] == "PRIVMSG")
-            handlePRIVMSG();
-        else if (tokens[0] == "KICK")
-            handleKICK();
-        else if (tokens[0] == "INVITE")
-            handleINVITE();
-        else if (tokens[0] == "TOPIC")
-            handleTOPIC();
-        else if (tokens[0] == "MODE")
-            handleMODE();
+            handlePRIVMSG(server, clientData, tokens);
+        // else if (tokens[0] == "KICK")
+        //     handleKICK(clientData, tokens);
+        // else if (tokens[0] == "INVITE")
+        //     handleINVITE(clientData, tokens);
+        // else if (tokens[0] == "TOPIC")
+        //     handleTOPIC(clientData, tokens);
+        // else if (tokens[0] == "MODE")
+        //     handleMODE(clientData, tokens);
         
-        return (true);
     }
-    return (false);
 }

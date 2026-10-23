@@ -31,7 +31,7 @@
 // Get a new clientSocket to establish connection
 int init_client_socket(int &serverSocket);
 
-bool handleCommands(server &server, t_clientData &clientData, std::string cmd);
+void handleCommands(server &server, t_clientData &clientData, std::string cmd);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
@@ -45,3 +45,8 @@ void logUserMsg(std::string user, std::string msg);
 
 // Output the err message passed in parameter in stderr
 void display_err(std::string err);
+
+
+// ----------------------------------|NETWORK|---------------------------------- //
+
+int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg);

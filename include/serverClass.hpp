@@ -32,5 +32,6 @@ class server {
         void setPassword(std::string input);
         bool checkPassword(std::string input);
         bool initialize(const char *str_port, const std::string &password);
+        int  getContactSocket(std::string contactUsername);
         bool run();
 };

@@ -1,17 +1,17 @@
 #include "../../include/main.hpp"
 
-// static int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
+int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
 
-//     std::string formatMsg = "[";
-//     formatMsg += clientData.username;
-//     formatMsg += "] ";
-//     formatMsg += msg;
-//     formatMsg += "\n";
+    std::string formatMsg = "[";
+    formatMsg += clientData.username;
+    formatMsg += "] ";
+    formatMsg += msg;
+    formatMsg += "\n";
 
-//     ssize_t bytesSent = send(clientSocket, formatMsg.c_str(), formatMsg.size(), 0);
+    ssize_t bytesSent = send(clientSocket, formatMsg.c_str(), formatMsg.size(), 0);
     
-//     return (bytesSent == -1 ? 1 : 0); 
-// }
+    return (bytesSent == -1 ? 1 : 0); 
+}
 
 // static int broadcastMsg(t_clientData &clientData, std::vector<t_clientData> &clients, int &clientSocket, std::string msg){
 
