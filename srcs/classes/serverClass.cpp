@@ -25,7 +25,7 @@ void server::closeAll(){
 int server::getContactSocket(std::string contactName){
 
     for (size_t i = 1; i < this->_clients.size(); i++)
-        if (this->_clients[i].name == contactName)
+        if (this->_clients[i].username == contactName)
             return (this->_clients[i].poll.fd);
     
     return (-1);

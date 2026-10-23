@@ -15,6 +15,7 @@ static void handlePASS (server &server, t_clientData &clientData, std::vector<st
     if (server.checkPassword(tokens[1])){
         clientData.passwordAccepted = true;
         logMsg('i', "Password accepted for client:", clientData.username);
+        checkToggleRegistration(clientData);
     }
     else
         logMsg('e', "Invalid password provided by client:", clientData.username);
@@ -73,6 +74,9 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
         return;
     }
 
+    if (!tokens[1].empty() && tokens[1][0] == '#')
+            tokens[1].erase(0, 1);
+
     // #TODO: Make the function also search for channels with the same name
     int contactSocket = server.getContactSocket(tokens[1]);
     if (contactSocket == -1){
@@ -80,14 +84,11 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
         return;
     }
 
-    if (!tokens[0].empty() && tokens[0][0] == '#')
-            tokens[0].erase(0, 1);
-
     std::string msg;
     for (size_t i = 2; i < tokens.size(); i++)
-        msg += tokens[i] + '\n';
+        msg += tokens[i] + ' ';
 
-    if (sendMsg(clientData, contactSocket, msg)){
+    if (sendMsg(clientData, contactSocket, msg) || sendMsg(clientData, clientData.poll.fd, msg)){
         logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");
         return ;
     }
