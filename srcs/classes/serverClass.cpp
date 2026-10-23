@@ -38,3 +38,11 @@ std::vector<int> server::getChannelMembers(std::string channelName) const {
 
     return (std::vector<int>());
 }
+
+std::vector<t_channel> &server::getChannelsList(){
+    return (this->_channels);
+}
+
+void server::addNewChannel(t_channel newChannel){
+    this->_channels.push_back(newChannel);
+}

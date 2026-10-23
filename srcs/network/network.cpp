@@ -2,11 +2,7 @@
 
 int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
 
-    std::string formatMsg = "[";
-    formatMsg += clientData.username;
-    formatMsg += "] ";
-    formatMsg += msg;
-    formatMsg += "\n";
+    std::string formatMsg = "[" + clientData.username + "]" + msg + "\n";
 
     ssize_t bytesSent = send(clientSocket, formatMsg.c_str(), formatMsg.size(), 0);
     
@@ -108,6 +104,7 @@ bool server::run(){
                     _clients.push_back(newClientData);
 
                     logMsg('i', "New client connected:", newClientData.username);
+                    sendMsg(newClientData, newClientData.poll.fd, std::string(" Authentificate yourself using /quote USER <username> * 0 :<name> AND /quote PASS <password>"));
                 }
                 else 
                 {

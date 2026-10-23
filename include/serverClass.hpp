@@ -27,14 +27,15 @@ typedef struct s_channels {
     bool                     inviteOnly;
     bool                     userLimit;
     size_t                   maxUsers;
+    size_t                   currentUsers;
 
-}               t_channels;
+}               t_channel;
 
 class server {
     private:
         std::string _password;
         std::vector<t_clientData> _clients;
-        std::vector<t_channels> _channels;
+        std::vector<t_channel> _channels;
 
         void closeAll();
         server(const server &other);
@@ -45,10 +46,12 @@ class server {
         ~server();
 
         void setPassword(std::string input);
+        void addNewChannel(t_channel newChannel);
 
         int  getContactSocket(std::string contactUsername) const;
 
         std::vector<int> getChannelMembers(std::string channelName) const;
+        std::vector<t_channel> &getChannelsList();
 
         bool checkPassword(std::string input) const;
         bool initialize(const char *str_port, const std::string &password);

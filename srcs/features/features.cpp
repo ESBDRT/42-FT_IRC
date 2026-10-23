@@ -60,12 +60,55 @@ static void handleUSER (t_clientData &clientData, std::vector<std::string> token
     checkToggleRegistration(clientData);
 }
 
-// static void handleJOIN (t_clientData &clientData, std::vector<std::string> tokens){
-//     if (!clientData.isRegistered){
-//         logMsg('e', std::string (clientData.username + " must be registered to join channels"), "");
-//         return;
-//     }
-// }
+static void handleJOIN (server &server, t_clientData &clientData, std::vector<std::string> tokens){
+
+    if (!clientData.isRegistered){
+        logMsg('e', std::string (clientData.username + " must be registered to join channels"), "");
+        return;
+    }
+
+    if (!tokens[1].empty() && tokens[1][0] == '#')
+            tokens[1].erase(0, 1);
+
+    std::vector<t_channel> &channelsList = server.getChannelsList();
+    
+    for (size_t i = 0; i < channelsList.size(); i++){                           // Search for an existing channel
+        if (channelsList[i].name == tokens[1])
+        {   
+            std::vector<int> members = server.getChannelMembers(tokens[1]);
+            for (size_t j = 0; j < members.size(); j++){
+                if (clientData.poll.fd == members[j])
+                {
+                    logMsg('e', std::string(clientData.username + "is arleady in the channel"), tokens[1]);
+                    sendMsg(clientData, clientData.poll.fd, std::string(clientData.username + " is arleady in the channel " + tokens[1]));
+                    return ;
+                }
+            }
+                
+            channelsList[i].members.push_back(clientData.poll.fd);
+            broadcastMsg(clientData, channelsList[i].members, std::string (clientData.username + " joined the " + tokens[1] + " channel"));
+            logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");
+            return ;
+        }
+    }
+
+    t_channel newChannel;
+    newChannel.currentUsers = 0;
+    newChannel.inviteOnly = false;
+    newChannel.isPasswordLocked = false;
+    newChannel.maxUsers = 5;
+    newChannel.members.push_back(clientData.poll.fd);
+    newChannel.name = tokens[1];
+    newChannel.operators.push_back(clientData.poll.fd);
+    newChannel.password = "";
+    newChannel.restrictedTopic = false;
+    newChannel.topic = "";
+    newChannel.userLimit = false;
+    server.addNewChannel(newChannel);
+
+    logMsg('i', std::string (clientData.username + " joined channel " + tokens[1]), "");
+    sendMsg(clientData, clientData.poll.fd, std::string (" You joined the " + tokens[1] + " channel"));
+}
 
 static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector<std::string> tokens){
 
@@ -85,11 +128,24 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
     if (contactSocket == -1)
     {
         std::vector<int> channelMembers = server.getChannelMembers(tokens[1]);
+
+        std::cout << "CHANNEL : " << tokens[1] << std::endl;
+
+        std::cout << "NB MEMBERS : "
+                  << channelMembers.size() << std::endl;
+
+        for (size_t i = 0; i < channelMembers.size(); i++)
+        {
+            std::cout << "MEMBER FD : "
+                      << channelMembers[i] << std::endl;
+        }
+
         if (channelMembers.empty())
             logMsg('e', std::string (clientData.username + " could not find user/channel named: " + tokens[1]), "");
         else {
             msg.insert(0, std::string ("[" + tokens[1] + "]: "));
             broadcastMsg(clientData, channelMembers, msg);
+            logMsg('i', std::string (clientData.username + " has sent a message in " + tokens[1]), "");
         }
         return;
     }
@@ -98,6 +154,9 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
         logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");
         return ;
     }
+
+    logMsg('i', std::string (clientData.username + " has sent a message to " + tokens[1]), "");
+
 }   
 
 // static void handleKICK (t_clientData &clientData, std::vector<std::string> tokens){
@@ -114,6 +173,11 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
 
 // static void handleMODE (t_clientData &clientData, std::vector<std::string> tokens){
 
+// }
+
+// static void handlePING (t_clientData &clientData){
+
+//     send(clientData.poll.fd, &clientData.buffer, )
 // }
 
 void handleCommands(server &server, t_clientData &clientData, std::string cmd){
@@ -133,8 +197,8 @@ void handleCommands(server &server, t_clientData &clientData, std::string cmd){
             handleNICK(clientData, tokens);
         else if (tokens[0] == "USER" && tokens.size() >= 5)
             handleUSER(clientData, tokens);
-        // else if (tokens[0] == "JOIN")
-        //     handleJOIN(clientData, tokens);
+        else if (tokens[0] == "JOIN")
+            handleJOIN(server, clientData, tokens);
         else if (tokens[0] == "PRIVMSG")
             handlePRIVMSG(server, clientData, tokens);
         // else if (tokens[0] == "KICK")
@@ -145,6 +209,7 @@ void handleCommands(server &server, t_clientData &clientData, std::string cmd){
         //     handleTOPIC(clientData, tokens);
         // else if (tokens[0] == "MODE")
         //     handleMODE(clientData, tokens);
-        
+        else
+            logMsg('e', "Unknown command: ", tokens[0]);
     }
 }
