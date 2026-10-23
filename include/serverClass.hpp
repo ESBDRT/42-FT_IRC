@@ -16,10 +16,25 @@ typedef struct s_clientData {
     bool            isOperator;
 }               t_clientData;
 
+typedef struct s_channels {
+    std::vector<int> members;
+    std::vector<int> operators;
+    std::string              name;
+    std::string              topic;
+    std::string              password;
+    bool                     isPasswordLocked;
+    bool                     restrictedTopic;
+    bool                     inviteOnly;
+    bool                     userLimit;
+    size_t                   maxUsers;
+
+}               t_channels;
+
 class server {
     private:
         std::string _password;
         std::vector<t_clientData> _clients;
+        std::vector<t_channels> _channels;
 
         void closeAll();
         server(const server &other);
@@ -30,8 +45,12 @@ class server {
         ~server();
 
         void setPassword(std::string input);
-        bool checkPassword(std::string input);
+
+        int  getContactSocket(std::string contactUsername) const;
+
+        std::vector<int> getChannelMembers(std::string channelName) const;
+
+        bool checkPassword(std::string input) const;
         bool initialize(const char *str_port, const std::string &password);
-        int  getContactSocket(std::string contactUsername);
         bool run();
 };

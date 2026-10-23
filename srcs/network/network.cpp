@@ -13,18 +13,14 @@ int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
     return (bytesSent == -1 ? 1 : 0); 
 }
 
-// static int broadcastMsg(t_clientData &clientData, std::vector<t_clientData> &clients, int &clientSocket, std::string msg){
+void broadcastMsg(t_clientData &clientData, std::vector<int> channelMembersSockets, std::string msg){
 
-//     for (size_t i = 1; i < clients.size(); i++)
-//     {
-//         if (clients[i].poll.fd == clientSocket)
-//             continue;
-            
-//         sendMsg(clientData, clients[i].poll.fd, msg);
-//     }
-    
-//     return (0);
-// }
+    for (size_t i = 0; i < channelMembersSockets.size(); i++)
+    {
+        if (sendMsg(clientData, channelMembersSockets[i], msg))
+            logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");
+    }
+}
 
 static bool subMsg(t_clientData &clientData, std::string &message)
 {

@@ -77,16 +77,22 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
     if (!tokens[1].empty() && tokens[1][0] == '#')
             tokens[1].erase(0, 1);
 
-    // #TODO: Make the function also search for channels with the same name
-    int contactSocket = server.getContactSocket(tokens[1]);
-    if (contactSocket == -1){
-        logMsg('e', std::string (clientData.username + " tried to send a message but could not reach: " + tokens[1]), "");
-        return;
-    }
-
     std::string msg;
     for (size_t i = 2; i < tokens.size(); i++)
         msg += tokens[i] + ' ';
+
+    int contactSocket = server.getContactSocket(tokens[1]);
+    if (contactSocket == -1)
+    {
+        std::vector<int> channelMembers = server.getChannelMembers(tokens[1]);
+        if (channelMembers.empty())
+            logMsg('e', std::string (clientData.username + " could not find user/channel named: " + tokens[1]), "");
+        else {
+            msg.insert(0, std::string ("[" + tokens[1] + "]: "));
+            broadcastMsg(clientData, channelMembers, msg);
+        }
+        return;
+    }
 
     if (sendMsg(clientData, contactSocket, msg) || sendMsg(clientData, clientData.poll.fd, msg)){
         logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");

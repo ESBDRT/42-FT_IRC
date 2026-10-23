@@ -50,3 +50,5 @@ void display_err(std::string err);
 // ----------------------------------|NETWORK|---------------------------------- //
 
 int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg);
+
+void broadcastMsg(t_clientData &clientData, std::vector<int> channelMembersSockets, std::string msg);
