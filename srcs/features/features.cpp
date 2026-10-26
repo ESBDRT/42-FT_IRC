@@ -7,6 +7,7 @@ static void checkToggleRegistration(t_clientData &clientData){
     else if (clientData.hasUsername && clientData.hasName && clientData.passwordAccepted){
         clientData.isRegistered = true;
         logMsg('i', std::string (clientData.username + " is now registered."), "");
+        sendMsg(clientData, clientData.poll.fd, " You are now registered");
     }
     
 }
@@ -15,10 +16,13 @@ static void handlePASS (server &server, t_clientData &clientData, std::vector<st
     if (server.checkPassword(tokens[1])){
         clientData.passwordAccepted = true;
         logMsg('i', "Password accepted for client:", clientData.username);
+        sendMsg(clientData, clientData.poll.fd, " Password accepted");
         checkToggleRegistration(clientData);
     }
-    else
+    else {
         logMsg('e', "Invalid password provided by client:", clientData.username);
+        sendMsg(clientData, clientData.poll.fd, "Invalid password, try again");
+    }
 }
 
 static void handleNICK (t_clientData &clientData, std::vector<std::string> tokens){
@@ -31,6 +35,7 @@ static void handleNICK (t_clientData &clientData, std::vector<std::string> token
     clientData.hasUsername = true;
     
     logMsg('i', msg, clientData.username);
+    sendMsg(clientData, clientData.poll.fd, std::string(" Your username is now " + clientData.username));
 
     checkToggleRegistration(clientData);
 }
@@ -55,11 +60,13 @@ static void handleUSER (t_clientData &clientData, std::vector<std::string> token
     std::string msg = "Name: " + clientData.name + " changed to:";
     clientData.name = fullName;
     clientData.hasName = true;
-
+    
+    sendMsg(clientData, clientData.poll.fd, std::string(" Your name is now " + clientData.username));
     logMsg('i', msg, clientData.name);
     checkToggleRegistration(clientData);
 }
 
+// TODO: MODE est cassew
 static void handleJOIN (server &server, t_clientData &clientData, std::vector<std::string> tokens){
 
     if (!clientData.isRegistered){
@@ -67,48 +74,68 @@ static void handleJOIN (server &server, t_clientData &clientData, std::vector<st
         return;
     }
 
-    if (!tokens[1].empty() && tokens[1][0] == '#')
-            tokens[1].erase(0, 1);
+    if (tokens.size() < 2){
+        sendMsg(clientData, clientData.poll.fd, std::string("Not enough parameters for JOIN"));
+        return ;
+    }
 
-    std::vector<t_channel> &channelsList = server.getChannelsList();
-    
-    for (size_t i = 0; i < channelsList.size(); i++){                           // Search for an existing channel
-        if (channelsList[i].name == tokens[1])
-        {   
-            std::vector<int> members = server.getChannelMembers(tokens[1]);
-            for (size_t j = 0; j < members.size(); j++){
-                if (clientData.poll.fd == members[j])
-                {
-                    logMsg('e', std::string(clientData.username + "is arleady in the channel"), tokens[1]);
-                    sendMsg(clientData, clientData.poll.fd, std::string(clientData.username + " is arleady in the channel " + tokens[1]));
-                    return ;
-                }
+    t_channel &targetChannel = server.getChannelInfo(tokens[1]);
+    if (!targetChannel.name.empty())
+    {
+        for (size_t j = 0; j < targetChannel.members.size(); j++){
+            if (clientData.poll.fd == targetChannel.members[j])
+            {
+                logMsg('e', std::string(clientData.username + " is arleady in the channel"), tokens[1]);
+                sendMsg(clientData, clientData.poll.fd, std::string(clientData.username + " is arleady in the channel " + tokens[1]));
+                return ;
             }
-                
-            channelsList[i].members.push_back(clientData.poll.fd);
-            broadcastMsg(clientData, channelsList[i].members, std::string (clientData.username + " joined the " + tokens[1] + " channel"));
+        }
+    
+        if (targetChannel.isPasswordLocked && (tokens.size() < 3 || tokens[2].empty()))
+        {
+            logMsg('e', std::string(clientData.username + " no password provided for channel " + tokens[1]), "");
+            sendMsg(clientData, clientData.poll.fd, std::string(" Channel " + tokens[1] + " is password protected"));
+            return ;
+        }   
+        else if (targetChannel.isPasswordLocked && targetChannel.password != tokens[2])
+        {
+            logMsg('e', std::string(clientData.username + "invalid password provided for channel " + tokens[1]), "");
+            sendMsg(clientData, clientData.poll.fd, std::string(" Access denied: invalid password for channel " + tokens[1]));
+            return ;
+        }
+        else 
+        {
+            targetChannel.members.push_back(clientData.poll.fd);
+            broadcastMsg(clientData, targetChannel.members, std::string (clientData.username + " joined the " + tokens[1] + " channel"));
             logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");
             return ;
         }
     }
+    else 
+    {
+        t_channel newChannel;
 
-    t_channel newChannel;
-    newChannel.currentUsers = 0;
-    newChannel.inviteOnly = false;
-    newChannel.isPasswordLocked = false;
-    newChannel.maxUsers = 5;
-    newChannel.members.push_back(clientData.poll.fd);
-    newChannel.name = tokens[1];
-    newChannel.operators.push_back(clientData.poll.fd);
-    newChannel.password = "";
-    newChannel.restrictedTopic = false;
-    newChannel.topic = "";
-    newChannel.userLimit = false;
-    server.addNewChannel(newChannel);
+        newChannel.currentUsers = 1;
+        newChannel.inviteOnly = false;
+        newChannel.isPasswordLocked = false;
+        newChannel.maxUsers = 10;
+        newChannel.name = tokens[1];
+        newChannel.operators.push_back(clientData.poll.fd);
+        newChannel.password = "";
+        newChannel.restrictedTopic = false;
+        newChannel.topic = "";
+        newChannel.userLimit = false;
+        newChannel.members.push_back(clientData.poll.fd);
+        server.addNewChannel(newChannel);
+        
+        broadcastMsg(clientData, newChannel.members, std::string (clientData.username + " joined the " + tokens[1] + " channel"));
+        logMsg('i', std::string (clientData.username + " Created channel " + tokens[1]), "");        
+        logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");        
+    }
 
-    logMsg('i', std::string (clientData.username + " joined channel " + tokens[1]), "");
-    sendMsg(clientData, clientData.poll.fd, std::string (" You joined the " + tokens[1] + " channel"));
+    return ;
 }
+
 
 static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector<std::string> tokens){
 
@@ -128,18 +155,7 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
     if (contactSocket == -1)
     {
         std::vector<int> channelMembers = server.getChannelMembers(tokens[1]);
-
-        std::cout << "CHANNEL : " << tokens[1] << std::endl;
-
-        std::cout << "NB MEMBERS : "
-                  << channelMembers.size() << std::endl;
-
-        for (size_t i = 0; i < channelMembers.size(); i++)
-        {
-            std::cout << "MEMBER FD : "
-                      << channelMembers[i] << std::endl;
-        }
-
+       
         if (channelMembers.empty())
             logMsg('e', std::string (clientData.username + " could not find user/channel named: " + tokens[1]), "");
         else {
@@ -171,9 +187,130 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
 
 // }
 
-// static void handleMODE (t_clientData &clientData, std::vector<std::string> tokens){
+static void handleMODE (server &server, t_clientData &clientData, std::vector<std::string> tokens){
 
-// }
+    if (tokens.size() < 3)
+    {
+        sendMsg(clientData, clientData.poll.fd, std::string("Not enough parameters for MODE"));
+        return ;
+    }
+
+    t_channel &currentChannel = server.getChannelInfo(tokens[1]);
+    if (!currentChannel.name.empty())
+    {
+        if (!server.isOperator(currentChannel, clientData.poll.fd)){
+            logMsg('e', std::string (clientData.username + "tried" + tokens[2] + " on channel " + tokens[1] + " but isn't an operator"), "");               
+            sendMsg(clientData, clientData.poll.fd, std::string("Permission denied, you must be an opeartor to use the MODE command"));
+            return ;
+        }
+        else 
+        {
+            // Toggle invite only
+            if (tokens[2] == "+i")
+            {   
+                if (!currentChannel.inviteOnly)
+                {
+                    currentChannel.inviteOnly = true;
+                    logMsg('i', std::string ("Channel " + tokens[1] + " has been set to invite only by " + clientData.username), "");
+                    broadcastMsg(clientData, currentChannel.members, std::string("This channel is now invite only"));                    
+                }
+                else 
+                {
+                    logMsg('e', std::string (clientData.username + "tried" + tokens[2] + " on channel " + tokens[1] + " but channel is arleady set to invite only"), "");
+                    sendMsg(clientData, clientData.poll.fd, std::string("Channel is arleady set to invite only"));
+                }
+            }
+            else if (tokens[2] == "-i")
+            {
+                if (currentChannel.inviteOnly)
+                {
+                    currentChannel.inviteOnly = false;
+                    logMsg('i', std::string ("Channel " + tokens[1] + " has been set to open by " + clientData.username), "");
+                    broadcastMsg(clientData, currentChannel.members, std::string("This channel is now open"));
+                    return ;        
+                }
+                else 
+                {
+                    logMsg('e', std::string (clientData.username + "tried" + tokens[2] + " on channel " + tokens[1] + " but channel is arleady set to open"), "");
+                    sendMsg(clientData, clientData.poll.fd, std::string("Channel is arleady set to invite open"));
+                    return ;
+                }
+            }
+            // else if (tokens[2] == "+t"){
+            // }
+            // else if (tokens[2] == "-t"){
+            // }
+            // Toggle password protection
+            else if (tokens[2] == "+k")
+            {
+                if (!currentChannel.isPasswordLocked)
+                {
+                    if (tokens.size() < 4 || tokens[3].empty()){
+                        logMsg('e', std::string (clientData.username + "tried" + tokens[2] + " on channel " + tokens[1] + " but password cannot be empty"), "");
+                        sendMsg(clientData, clientData.poll.fd, std::string("Password cannot be empty"));
+                        return ;
+                    }
+                    else
+                    {
+                        currentChannel.isPasswordLocked = true;
+                        currentChannel.password = tokens[3];
+                        logMsg('i', std::string ("Channel " + tokens[1] + " has been password locked by " + clientData.username), "");
+                        broadcastMsg(clientData, currentChannel.members, std::string("This channel is now password locked"));
+                        return ;                
+                    }
+                }
+                else 
+                {
+                    logMsg('e', std::string (clientData.username + "tried" + tokens[2] + " on channel " + tokens[1] + " but channel is arleady password locked"), "");
+                    sendMsg(clientData, clientData.poll.fd, std::string("Channel is arleady password locked"));
+                }
+            }
+            else if (tokens[2] == "-k")
+            {
+                if (currentChannel.isPasswordLocked)
+                {
+                    currentChannel.password = "";
+                    currentChannel.isPasswordLocked = false;
+                    logMsg('i', std::string ("Channel " + tokens[1] + " has been password unlocked by " + clientData.username), "");
+                    broadcastMsg(clientData, currentChannel.members, std::string("This channel is not password locked anymore"));
+                }
+                else 
+                {
+                    logMsg('e', std::string (clientData.username + "tried " + tokens[2] + " on channel " + tokens[1] + " but channel is arleady password unlocked"), "");
+                    sendMsg(clientData, clientData.poll.fd, std::string("Channel is arleady password unlocked"));
+                }
+            }
+            // else if (tokens[2] == "+o")
+            // {
+
+            // }
+            // else if (tokens[2] == "-o")
+            // {
+
+            // }
+            // else if (tokens[2] == "+l")
+            // {
+
+            // }
+            // else if (tokens[2] == "-l")
+            // {
+
+            // }
+            else 
+            {
+                logMsg('e', std::string (clientData.username + " tried MODE " + tokens[2] + ": unknown parameter"), "");
+                sendMsg(clientData, clientData.poll.fd, std::string("unknown parameter: " + tokens[2]));
+                return ;
+            }
+        }
+    }
+    else {
+        logMsg('e', std::string (clientData.username + " tried" + tokens[2] + " on channel " + tokens[1] + " but channel doesn't exist"), "");
+        sendMsg(clientData, clientData.poll.fd, std::string("Channel " + tokens[1] + " doesn't exist"));
+        return ;
+    }
+}
+    
 
 // static void handlePING (t_clientData &clientData){
 
@@ -207,9 +344,9 @@ void handleCommands(server &server, t_clientData &clientData, std::string cmd){
         //     handleINVITE(clientData, tokens);
         // else if (tokens[0] == "TOPIC")
         //     handleTOPIC(clientData, tokens);
-        // else if (tokens[0] == "MODE")
-        //     handleMODE(clientData, tokens);
+        else if (tokens[0] == "MODE")
+            handleMODE(server, clientData, tokens);
         else
-            logMsg('e', "Unknown command: ", tokens[0]);
+            logMsg('w', "Unknown command: ", tokens[0]);
     }
 }

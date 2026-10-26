@@ -46,3 +46,25 @@ std::vector<t_channel> &server::getChannelsList(){
 void server::addNewChannel(t_channel newChannel){
     this->_channels.push_back(newChannel);
 }
+
+t_channel &server::getChannelInfo(std::string channelName){
+
+    for (size_t i = 0; i < this->_channels.size(); i++)
+        if (this->_channels[i].name == channelName)
+            return (this->_channels[i]);
+
+    static t_channel emptyChannel;
+    emptyChannel.name = "";
+    emptyChannel.members.clear();
+    emptyChannel.operators.clear();
+    return (emptyChannel);
+}   
+
+bool server::isOperator(t_channel &channel, int &clientSocket) const {
+
+    for (size_t i = 0; i < channel.operators.size(); i++)
+        if (clientSocket == channel.operators[i])
+            return (true);
+    
+    return (false);
+}

@@ -13,7 +13,6 @@ typedef struct s_clientData {
     bool            hasUsername;
     bool            passwordAccepted;
     bool            isRegistered;
-    bool            isOperator;
 }               t_clientData;
 
 typedef struct s_channels {
@@ -52,8 +51,10 @@ class server {
 
         std::vector<int> getChannelMembers(std::string channelName) const;
         std::vector<t_channel> &getChannelsList();
+        t_channel &getChannelInfo(std::string channelName);
 
         bool checkPassword(std::string input) const;
         bool initialize(const char *str_port, const std::string &password);
+        bool isOperator(t_channel &channel, int &clientSocket) const;
         bool run();
 };

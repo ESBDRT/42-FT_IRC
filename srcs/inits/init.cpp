@@ -82,7 +82,6 @@ bool server::initialize(const char *str_port, const std::string &password){
     servData.hasUsername = true;
     servData.isRegistered = true;
     servData.passwordAccepted = true;
-    servData.isOperator = true;
     _clients.push_back(servData);
 
     logMsg('i', "Waiting for connections", "");

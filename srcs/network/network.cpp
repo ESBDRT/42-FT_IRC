@@ -100,7 +100,6 @@ bool server::run(){
                     newClientData.hasUsername = false;
                     newClientData.passwordAccepted = false;
                     newClientData.isRegistered = false;
-                    newClientData.isOperator = false;
                     _clients.push_back(newClientData);
 
                     logMsg('i', "New client connected:", newClientData.username);
