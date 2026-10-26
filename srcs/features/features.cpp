@@ -91,7 +91,7 @@ static void handleJOIN (server &server, ClientData &clientData, std::vector<std:
             if (clientData.poll.fd == targetChannel.members[j])
             {
                 logMsg('e', std::string(clientData.username + " is arleady in the channel"), tokens[1]);
-                sendMsg(clientData, clientData.poll.fd, std::string("You are arleady in the " + tokens[1] + " channel"));
+                sendMsg(clientData, clientData.poll.fd, std::string(" You are arleady in the " + tokens[1] + " channel"));
                 return ;
             }
         }
@@ -205,7 +205,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
     {
         if (!server.isOperator(currentChannel, clientData.poll.fd)){
             logMsg('e', std::string (clientData.username + "tried" + tokens[2] + " on channel " + tokens[1] + " but isn't an operator"), "");               
-            sendMsg(clientData, clientData.poll.fd, std::string("Permission denied, you must be an opeartor to use the MODE command"));
+            sendMsg(clientData, clientData.poll.fd, std::string(" Permission denied, you must be an opeartor to use the MODE command"));
             return ;
         }
         else 
@@ -217,7 +217,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
                 {
                     currentChannel.inviteOnly = true;
                     logMsg('i', std::string ("Channel " + tokens[1] + " has been set to invite only by " + clientData.username), "");
-                    broadcastMsg(clientData, currentChannel.members, std::string("This channel is now invite only"));                    
+                    broadcastMsg(clientData, currentChannel.members, std::string(" This channel is now invite only"));                    
                 }
                 else 
                 {
@@ -231,7 +231,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
                 {
                     currentChannel.inviteOnly = false;
                     logMsg('i', std::string ("Channel " + tokens[1] + " has been set to open by " + clientData.username), "");
-                    broadcastMsg(clientData, currentChannel.members, std::string("This channel is now open"));
+                    broadcastMsg(clientData, currentChannel.members, std::string(" This channel is now open"));
                     return ;        
                 }
                 else 
@@ -277,7 +277,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
                     currentChannel.password = "";
                     currentChannel.isPasswordLocked = false;
                     logMsg('i', std::string ("Channel " + tokens[1] + " has been password unlocked by " + clientData.username), "");
-                    broadcastMsg(clientData, currentChannel.members, std::string("This channel is not password locked anymore"));
+                    broadcastMsg(clientData, currentChannel.members, std::string(" This channel is not password locked anymore"));
                 }
                 else 
                 {
