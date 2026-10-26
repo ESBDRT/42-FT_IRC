@@ -4,37 +4,48 @@
 #include <string>
 #include <vector>
 
-typedef struct s_clientData {
-    struct pollfd   poll;
-    std::string     buffer;
-    std::string     name;
-    std::string     username;
-    bool            hasName;
-    bool            hasUsername;
-    bool            passwordAccepted;
-    bool            isRegistered;
-}               t_clientData;
+class ClientData {
+    public:
+        ClientData();
+        ClientData(const ClientData &other);
+        ClientData &operator=(const ClientData &other);
+        ~ClientData();
 
-typedef struct s_channels {
-    std::vector<int> members;
-    std::vector<int> operators;
-    std::string              name;
-    std::string              topic;
-    std::string              password;
-    bool                     isPasswordLocked;
-    bool                     restrictedTopic;
-    bool                     inviteOnly;
-    bool                     userLimit;
-    size_t                   maxUsers;
-    size_t                   currentUsers;
+        struct pollfd   poll;
+        std::string     buffer;
+        std::string     name;
+        std::string     username;
+        bool            hasName;
+        bool            hasUsername;
+        bool            passwordAccepted;
+        bool            isRegistered;
+};
 
-}               t_channel;
+class Channel {
+    public:
+        Channel();
+        Channel(const Channel &other);
+        Channel &operator=(const Channel &other);
+        ~Channel();
+
+        std::vector<int> members;
+        std::vector<int> operators;
+        std::string      name;
+        std::string      topic;
+        std::string      password;
+        bool             isPasswordLocked;
+        bool             restrictedTopic;
+        bool             inviteOnly;
+        bool             userLimit;
+        size_t           maxUsers;
+        size_t           currentUsers;
+};
 
 class server {
     private:
         std::string _password;
-        std::vector<t_clientData> _clients;
-        std::vector<t_channel> _channels;
+        std::vector<ClientData> _clients;
+        std::vector<Channel> _channels;
 
         void closeAll();
         server(const server &other);
@@ -45,16 +56,16 @@ class server {
         ~server();
 
         void setPassword(std::string input);
-        void addNewChannel(t_channel newChannel);
+        void addNewChannel(Channel newChannel);
 
         int  getContactSocket(std::string contactUsername) const;
 
         std::vector<int> getChannelMembers(std::string channelName) const;
-        std::vector<t_channel> &getChannelsList();
-        t_channel &getChannelInfo(std::string channelName);
+        std::vector<Channel> &getChannelsList();
+        Channel &getChannelInfo(std::string channelName);
 
         bool checkPassword(std::string input) const;
         bool initialize(const char *str_port, const std::string &password);
-        bool isOperator(t_channel &channel, int &clientSocket) const;
+        bool isOperator(Channel &channel, int &clientSocket) const;
         bool run();
 };

@@ -31,7 +31,7 @@
 // Get a new clientSocket to establish connection
 int init_client_socket(int &serverSocket);
 
-void handleCommands(server &server, t_clientData &clientData, std::string cmd);
+void handleCommands(server &server, ClientData &clientData, std::string cmd);
 
 // ----------------------------------|UTILS|---------------------------------- //
 
@@ -49,6 +49,6 @@ void display_err(std::string err);
 
 // ----------------------------------|NETWORK|---------------------------------- //
 
-int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg);
+int sendMsg(ClientData &clientData, int &clientSocket, std::string msg);
 
-void broadcastMsg(t_clientData &clientData, std::vector<int> channelMembersSockets, std::string msg);
+void broadcastMsg(ClientData &clientData, std::vector<int> channelMembersSockets, std::string msg);

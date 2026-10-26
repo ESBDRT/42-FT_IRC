@@ -1,6 +1,6 @@
 #include "../../include/main.hpp"
 
-int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
+int sendMsg(ClientData &clientData, int &clientSocket, std::string msg){
 
     std::string formatMsg = "[" + clientData.username + "]" + msg + "\n";
 
@@ -9,7 +9,7 @@ int sendMsg(t_clientData &clientData, int &clientSocket, std::string msg){
     return (bytesSent == -1 ? 1 : 0); 
 }
 
-void broadcastMsg(t_clientData &clientData, std::vector<int> channelMembersSockets, std::string msg){
+void broadcastMsg(ClientData &clientData, std::vector<int> channelMembersSockets, std::string msg){
 
     for (size_t i = 0; i < channelMembersSockets.size(); i++)
     {
@@ -18,7 +18,7 @@ void broadcastMsg(t_clientData &clientData, std::vector<int> channelMembersSocke
     }
 }
 
-static bool subMsg(t_clientData &clientData, std::string &message)
+static bool subMsg(ClientData &clientData, std::string &message)
 {
     std::string::size_type pos = clientData.buffer.find("\r\n");
 
@@ -30,7 +30,7 @@ static bool subMsg(t_clientData &clientData, std::string &message)
     return (true);
 }
 
-static int readMsg(server &server, t_clientData &clientData, int &clientSocket){
+static int readMsg(server &server, ClientData &clientData, int &clientSocket){
 
     char tmp[4096];
     std::string msg;
@@ -91,7 +91,7 @@ bool server::run(){
                     newClientPoll.events = POLLIN;
                     newClientPoll.revents = 0;
 
-                    t_clientData newClientData;
+                    ClientData newClientData;
                     newClientData.poll = newClientPoll;
                     newClientData.buffer = "";
                     newClientData.username = "Default";

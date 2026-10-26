@@ -1,6 +1,6 @@
 #include "../../include/main.hpp"
 
-static void checkToggleRegistration(t_clientData &clientData){
+static void checkToggleRegistration(ClientData &clientData){
     
     if (clientData.isRegistered)
         return;
@@ -12,7 +12,7 @@ static void checkToggleRegistration(t_clientData &clientData){
     
 }
 
-static void handlePASS (server &server, t_clientData &clientData, std::vector<std::string> tokens){
+static void handlePASS (server &server, ClientData &clientData, std::vector<std::string> tokens){
     if (server.checkPassword(tokens[1])){
         clientData.passwordAccepted = true;
         logMsg('i', "Password accepted for client:", clientData.username);
@@ -25,7 +25,7 @@ static void handlePASS (server &server, t_clientData &clientData, std::vector<st
     }
 }
 
-static void handleNICK (t_clientData &clientData, std::vector<std::string> tokens){
+static void handleNICK (ClientData &clientData, std::vector<std::string> tokens){
     
     if (clientData.username == tokens[1])
         return;
@@ -40,7 +40,7 @@ static void handleNICK (t_clientData &clientData, std::vector<std::string> token
     checkToggleRegistration(clientData);
 }
 
-static void handleUSER (t_clientData &clientData, std::vector<std::string> tokens){
+static void handleUSER (ClientData &clientData, std::vector<std::string> tokens){
     
     std::string fullName;
     size_t i = 4;
@@ -61,13 +61,18 @@ static void handleUSER (t_clientData &clientData, std::vector<std::string> token
     clientData.name = fullName;
     clientData.hasName = true;
     
-    sendMsg(clientData, clientData.poll.fd, std::string(" Your name is now " + clientData.username));
+    sendMsg(clientData, clientData.poll.fd, std::string(" Your name is now " + clientData.name));
     logMsg('i', msg, clientData.name);
     checkToggleRegistration(clientData);
 }
 
-// TODO: MODE est cassew
-static void handleJOIN (server &server, t_clientData &clientData, std::vector<std::string> tokens){
+static void handleCAP(ClientData &clientData){
+    if (sendMsg(clientData, clientData.poll.fd, " This server does not support CAP capabilities"))
+        logMsg('e', "Failed to send CAP response to:", clientData.username);
+}
+
+
+static void handleJOIN (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
     if (!clientData.isRegistered){
         logMsg('e', std::string (clientData.username + " must be registered to join channels"), "");
@@ -79,41 +84,41 @@ static void handleJOIN (server &server, t_clientData &clientData, std::vector<st
         return ;
     }
 
-    t_channel &targetChannel = server.getChannelInfo(tokens[1]);
+    Channel &targetChannel = server.getChannelInfo(tokens[1]);
     if (!targetChannel.name.empty())
     {
         for (size_t j = 0; j < targetChannel.members.size(); j++){
             if (clientData.poll.fd == targetChannel.members[j])
             {
                 logMsg('e', std::string(clientData.username + " is arleady in the channel"), tokens[1]);
-                sendMsg(clientData, clientData.poll.fd, std::string(clientData.username + " is arleady in the channel " + tokens[1]));
+                sendMsg(clientData, clientData.poll.fd, std::string("You are arleady in the " + tokens[1] + " channel"));
                 return ;
             }
         }
     
         if (targetChannel.isPasswordLocked && (tokens.size() < 3 || tokens[2].empty()))
         {
-            logMsg('e', std::string(clientData.username + " no password provided for channel " + tokens[1]), "");
+            logMsg('e', std::string(clientData.username + " attempted to join the password locked channel" + tokens[1] + "without providing a password"), "");
             sendMsg(clientData, clientData.poll.fd, std::string(" Channel " + tokens[1] + " is password protected"));
             return ;
         }   
         else if (targetChannel.isPasswordLocked && targetChannel.password != tokens[2])
         {
-            logMsg('e', std::string(clientData.username + "invalid password provided for channel " + tokens[1]), "");
+            logMsg('e', std::string(clientData.username + " provided an invalid password for channel " + tokens[1]), "");
             sendMsg(clientData, clientData.poll.fd, std::string(" Access denied: invalid password for channel " + tokens[1]));
             return ;
         }
         else 
         {
             targetChannel.members.push_back(clientData.poll.fd);
-            broadcastMsg(clientData, targetChannel.members, std::string (clientData.username + " joined the " + tokens[1] + " channel"));
+            broadcastMsg(clientData, targetChannel.members, std::string (" " + clientData.username + " joined the " + tokens[1] + " channel"));
             logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");
             return ;
         }
     }
     else 
     {
-        t_channel newChannel;
+        Channel newChannel;
 
         newChannel.currentUsers = 1;
         newChannel.inviteOnly = false;
@@ -128,7 +133,7 @@ static void handleJOIN (server &server, t_clientData &clientData, std::vector<st
         newChannel.members.push_back(clientData.poll.fd);
         server.addNewChannel(newChannel);
         
-        broadcastMsg(clientData, newChannel.members, std::string (clientData.username + " joined the " + tokens[1] + " channel"));
+        broadcastMsg(clientData, newChannel.members, std::string (" " + clientData.username + " joined the " + tokens[1] + " channel"));
         logMsg('i', std::string (clientData.username + " Created channel " + tokens[1]), "");        
         logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");        
     }
@@ -137,7 +142,7 @@ static void handleJOIN (server &server, t_clientData &clientData, std::vector<st
 }
 
 
-static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector<std::string> tokens){
+static void handlePRIVMSG (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
     if (!clientData.isRegistered){
         logMsg('e', std::string (clientData.username + " must be registered to send messages"), "");
@@ -175,19 +180,19 @@ static void handlePRIVMSG (server &server, t_clientData &clientData, std::vector
 
 }   
 
-// static void handleKICK (t_clientData &clientData, std::vector<std::string> tokens){
+// static void handleKICK (ClientData &clientData, std::vector<std::string> tokens){
 
 // }
 
-// static void handleINVITE (t_clientData &clientData, std::vector<std::string> tokens){
+// static void handleINVITE (ClientData &clientData, std::vector<std::string> tokens){
 
 // }
 
-// static void handleTOPIC (t_clientData &clientData, std::vector<std::string> tokens){
+// static void handleTOPIC (ClientData &clientData, std::vector<std::string> tokens){
 
 // }
 
-static void handleMODE (server &server, t_clientData &clientData, std::vector<std::string> tokens){
+static void handleMODE (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
     if (tokens.size() < 3)
     {
@@ -195,7 +200,7 @@ static void handleMODE (server &server, t_clientData &clientData, std::vector<st
         return ;
     }
 
-    t_channel &currentChannel = server.getChannelInfo(tokens[1]);
+    Channel &currentChannel = server.getChannelInfo(tokens[1]);
     if (!currentChannel.name.empty())
     {
         if (!server.isOperator(currentChannel, clientData.poll.fd)){
@@ -255,7 +260,7 @@ static void handleMODE (server &server, t_clientData &clientData, std::vector<st
                         currentChannel.isPasswordLocked = true;
                         currentChannel.password = tokens[3];
                         logMsg('i', std::string ("Channel " + tokens[1] + " has been password locked by " + clientData.username), "");
-                        broadcastMsg(clientData, currentChannel.members, std::string("This channel is now password locked"));
+                        broadcastMsg(clientData, currentChannel.members, std::string(" This channel is now password locked"));
                         return ;                
                     }
                 }
@@ -312,12 +317,12 @@ static void handleMODE (server &server, t_clientData &clientData, std::vector<st
 }
     
 
-// static void handlePING (t_clientData &clientData){
+// static void handlePING (ClientData &clientData){
 
 //     send(clientData.poll.fd, &clientData.buffer, )
 // }
 
-void handleCommands(server &server, t_clientData &clientData, std::string cmd){
+void handleCommands(server &server, ClientData &clientData, std::string cmd){
 
     std::istringstream iss(cmd);
     std::string token;
@@ -328,7 +333,9 @@ void handleCommands(server &server, t_clientData &clientData, std::string cmd){
 
     if (tokens.size() > 0)
     {
-        if (tokens[0] == "PASS" && tokens.size() == 2)
+        if (tokens[0] == "CAP")
+            handleCAP(clientData);
+        else if (tokens[0] == "PASS" && tokens.size() == 2)
             handlePASS(server, clientData, tokens);        
         else if (tokens[0] == "NICK" && tokens.size() == 2)
             handleNICK(clientData, tokens);

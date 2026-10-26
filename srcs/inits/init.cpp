@@ -73,7 +73,7 @@ bool server::initialize(const char *str_port, const std::string &password){
     servPoll.fd = serverSocket;
     servPoll.events = POLLIN;
     servPoll.revents = 0;
-    t_clientData servData;
+    ClientData servData;
     servData.buffer = "";
     servData.username = "SERVER";
     servData.name = "SERVER";
