@@ -41,8 +41,6 @@ lvl options (s == SUCCESS | i == INFO | w == WARNING| e = ERROR)
 */
 void logMsg(char lvl, std::string msg, std::string arg);
 
-void logUserMsg(std::string user, std::string msg);
-
 // Output the err message passed in parameter in stderr
 void display_err(std::string err);
 
@@ -51,4 +49,6 @@ void display_err(std::string err);
 
 int sendMsg(ClientData &clientData, int &clientSocket, std::string msg);
 
-void broadcastMsg(ClientData &clientData, std::vector<int> channelMembersSockets, std::string msg);
+int sendPrivmsg(ClientData &clientData, int &clientSocket, const std::string &target, const std::string &msg);
+
+void broadcastMsg(ClientData &clientData, std::vector<int> channelMembersSockets, const std::string &target, const std::string &msg);

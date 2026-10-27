@@ -1,5 +1,6 @@
 #include "../../include/main.hpp"
 
+// Display time in european format
 static std::string displayTime(){
 
     char time[15];
@@ -13,10 +14,7 @@ static std::string displayTime(){
     return time;
 }
 
-void logUserMsg(std::string user, std::string msg){
-    std::cout << "[" << CLR_GREEN << user << CLR_RST << "]" << displayTime() << msg << std::endl; 
-}
-
+// Log the message using colors depending on the level
 void logMsg(char lvl, std::string msg, std::string arg){
     
     const char *CLR;
@@ -55,6 +53,7 @@ void logMsg(char lvl, std::string msg, std::string arg){
     out << std::endl;
 }
 
+// Log the err message in the STDERR
 void display_err(std::string err){
     std::cerr << CLR_RED << "[ERROR]: " <<  CLR_RST << err << CLR_RST << std::endl;
 }

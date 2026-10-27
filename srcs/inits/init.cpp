@@ -1,6 +1,7 @@
 #include "../../include/main.hpp"
 #include <fcntl.h>
 
+// Applies non-blocking to the provided socket
 static int set_nonblocking(int socket){
 
     int flags = fcntl(socket, F_GETFL, 0);
@@ -13,6 +14,7 @@ static int set_nonblocking(int socket){
     return (0);
 }
 
+// Perform different checks to validate the provided port
 static int check_port_conversion(const char *str_port){
 
     char *end;
@@ -35,44 +37,52 @@ static int check_port_conversion(const char *str_port){
 
 bool server::initialize(const char *str_port, const std::string &password){
 
+    // Sets the password in the object attributes
     setPassword(password);
 
-    struct sockaddr_in addr;
-
-    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);                                 // Initialize the socket
+    // Initialize the server socket
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);                                 
     if (serverSocket == -1)
         return (display_err("socket: " + std::string(std::strerror(errno))), false);
 
+    // Make the socket non blocking
     if (set_nonblocking(serverSocket)){
         close(serverSocket);
         return (false);
     }
 
+    // Perform different checks to see if the port provided by the user is valid
     int port = check_port_conversion(str_port);
     if (port == -1)
         return (close(serverSocket), false);
 
-    addr.sin_family = AF_INET;                                                          // Which address family/type are you using (ipv4, v6, etc..)
-    addr.sin_port = htons(port);                                                        // On which port is the socket listening
-    addr.sin_addr.s_addr = INADDR_ANY;                                                  // On which IP is the socket listening
+    // Socket data structure
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;          // Which address family/type are you using (ipv4, v6, etc..)
+    addr.sin_port = htons(port);        // On which port is the socket listening
+    addr.sin_addr.s_addr = INADDR_ANY;  // On which IP is the socket listening
 
-    if (bind(serverSocket, (struct sockaddr*)&addr, sizeof(addr)) == -1){               // Bind the ServerSocket to the provided port
+    // Bind the ServerSocket to the provided port
+    if (bind(serverSocket, (struct sockaddr*)&addr, sizeof(addr)) == -1){
         display_err("bind: " + std::string(std::strerror(errno)));
         close(serverSocket);
         return (false);
     }
 
-    if (listen(serverSocket, SOMAXCONN) == -1){                                         // Make the serverSocket go into listening state
+    // Switch the serverSocket to listening state
+    if (listen(serverSocket, SOMAXCONN) == -1){
         display_err("listen: " + std::string(std::strerror(errno)));
         close(serverSocket);
         return (false);
     }
 
+    // Poll configuration for the listening socket
     struct pollfd servPoll;
-
     servPoll.fd = serverSocket;
     servPoll.events = POLLIN;
     servPoll.revents = 0;
+
+    // Setting up client information
     ClientData servData;
     servData.buffer = "";
     servData.username = "SERVER";
@@ -88,6 +98,7 @@ bool server::initialize(const char *str_port, const std::string &password){
     return (true);
 }
 
+// Tries to create a socket and returns it or -1 on failure
 int init_client_socket(int &serverSocket){
 
     int clientSocket = accept(serverSocket, NULL, NULL);

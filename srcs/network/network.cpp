@@ -1,5 +1,6 @@
 #include "../../include/main.hpp"
 
+// THIS FUNCTION IS USED ONLY FOR LOGGING ON THE SENDING CLIENT ITSELF
 int sendMsg(ClientData &clientData, int &clientSocket, std::string msg){
 
     std::string formatMsg = "[" + clientData.username + "]" + msg + "\n";
@@ -9,15 +10,30 @@ int sendMsg(ClientData &clientData, int &clientSocket, std::string msg){
     return (bytesSent == -1 ? 1 : 0); 
 }
 
-void broadcastMsg(ClientData &clientData, std::vector<int> channelMembersSockets, std::string msg){
+// Send a IRC formatted msg
+int sendPrivmsg(ClientData &clientData, int &clientSocket, const std::string &target, const std::string &msg){
 
-    for (size_t i = 0; i < channelMembersSockets.size(); i++)
-    {
-        if (sendMsg(clientData, channelMembersSockets[i], msg))
-            logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");
+    std::string formatMsg = ":" + clientData.username + "!" + clientData.username + "@localhost PRIVMSG " + target + " :" + msg + "\r\n";
+
+    ssize_t bytesSent = send(clientSocket, formatMsg.c_str(), formatMsg.size(), 0);
+
+    return (bytesSent == static_cast<ssize_t>(formatMsg.size()) ? 0 : 1);
+}
+
+// Broadcast the message to every user in a channel except sender
+void broadcastMsg(ClientData &clientData, std::vector<int> channelMembersSockets, const std::string &target, const std::string &msg){
+
+    for (size_t i = 0; i < channelMembersSockets.size(); ++i){
+
+        if (channelMembersSockets[i] == clientData.poll.fd)
+            continue;
+
+        if (sendPrivmsg(clientData, channelMembersSockets[i], target, msg))
+            logMsg('e', std::string(clientData.username + " failed to send channel message"), target);
     }
 }
 
+// Search for a full irc formatted message, return false if not found, else extract the message from the buffer 
 static bool subMsg(ClientData &clientData, std::string &message)
 {
     std::string::size_type pos = clientData.buffer.find("\r\n");
@@ -30,55 +46,71 @@ static bool subMsg(ClientData &clientData, std::string &message)
     return (true);
 }
 
+// Read data from the socket
 static int readMsg(server &server, ClientData &clientData, int &clientSocket){
 
     char tmp[4096];
     std::string msg;
 
-    ssize_t bytesReceived = recv(clientSocket, &tmp, sizeof(tmp), 0);                      // Read from the socket
+    // Read from the socket
+    ssize_t bytesReceived = recv(clientSocket, &tmp, sizeof(tmp), 0);
 
+    // Succesfully read some bytes
     if (bytesReceived > 0){
 
         clientData.buffer.append(tmp, bytesReceived);
         while (subMsg(clientData, msg))
             handleCommands(server, clientData, msg);
 
-        return (bytesReceived);                                                             // Succesfully read some bytes
-    }                                                            
+        return (bytesReceived);
+    }                                
+
+    // Client disconnected gracefully
     else if (bytesReceived == 0)                                                    
-        return (logMsg('i', "Client disconnected:", clientData.username), 0);               // Client disconnected gracefully
+        return (logMsg('i', "Client disconnected:", clientData.username), 0);
+    
+    // Error, something went wrong
     else
-        return (logMsg('e', "Something went wrong..", ""), -1);                             // Error, something went wrong
+        return (logMsg('e', "Something went wrong..", ""), -1);
 }
 
 bool server::run(){
 
-    size_t i = 0;
+    // Build a vector of the clients pollfds
     std::vector<struct pollfd> pollFds;
     for (size_t j = 0; j < _clients.size(); j++)
         pollFds.push_back(_clients[j].poll);
 
-    int pollResult = poll(&pollFds[0], pollFds.size(), -1);                                 // Check if any events happend
+    // Check if any events happend
+    int pollResult = poll(&pollFds[0], pollFds.size(), -1);
     if (pollResult >= 1)
     {
         for (size_t j = 0; j < _clients.size(); j++)
             _clients[j].poll.revents = pollFds[j].revents;
 
+        size_t i = 0;
         while (i < _clients.size())
         {
-            if (_clients[i].poll.revents & POLLNVAL)                                             // Invalid FD
+            // POLLNVAL = Invalid FD
+            if (_clients[i].poll.revents & POLLNVAL)
             {
-                logMsg('e', "[SERVER]", "Invalid file descriptor");             
-                if (i == 0)                                                                     // If server, shutdown the program
-                    return (false);
+                logMsg('e', "[SERVER]", "Invalid file descriptor");
 
+                // If server, shutdown the program            
+                if (i == 0)                                                                     
+                    return (false);
+                
+                // Delete the client
+                // TODO: Investigate potential issue here, should also delete from pollfds vector ?
                 _clients.erase(_clients.begin() + i);
                 continue;
             }
 
+            // POLLIN = Data received
             if ((_clients[i].poll.revents & POLLIN))
             {
-                if (i == 0)                                                                     // 0 = Listening socket, tries to create a clientSocket and accept the connection
+                // 0 = Listening socket, tries to create a clientSocket and accept the connection
+                if (i == 0)                                                                     
                 {
                     int clientSocket = init_client_socket(_clients[0].poll.fd);
                     if (clientSocket == -1){
@@ -86,11 +118,13 @@ bool server::run(){
                         continue;
                     }
 
+                    // Create new poll structure for the client
                     struct pollfd newClientPoll;
                     newClientPoll.fd = clientSocket;
                     newClientPoll.events = POLLIN;
                     newClientPoll.revents = 0;
 
+                    // Create new clientData structure with default settings
                     ClientData newClientData;
                     newClientData.poll = newClientPoll;
                     newClientData.buffer = "";
@@ -104,10 +138,17 @@ bool server::run(){
 
                     logMsg('i', "New client connected:", newClientData.username);
                 }
+
+                // If a client has received data
                 else 
                 {
+                    // Read the data
                     int readResult = readMsg(*this, _clients[i], _clients[i].poll.fd);
-                    if (readResult == 0 || readResult == -1){                                       // 0 = Disconnected gracefully | -1 = Something went wrong
+
+                    // 0 = Disconnected gracefully | -1 = Something went wrong
+                    if (readResult == 0 || readResult == -1){
+                        
+                        // Close socket and remove client
                         close(_clients[i].poll.fd);
                         _clients.erase(_clients.begin() + i);
                         continue;
@@ -115,11 +156,14 @@ bool server::run(){
                 }
             }
 
+            // POLLHUP | POLLERR = Disconnetion or errors
             if (_clients[i].poll.revents & (POLLHUP | POLLERR))
             {
+                // If server failure, shutdown
                 if (i == 0)
                     return (logMsg('e', "[SERVER]", "Client hangup or socket error"), false);
 
+                // Log errors and close + remove client
                 logMsg('e', "[SERVER]", "Client hangup or socket error");
                 close(_clients[i].poll.fd);
                 _clients.erase(_clients.begin() + i);
@@ -129,10 +173,13 @@ bool server::run(){
             i++;
         }
     }
+
+    // If poll failed
     else if (pollResult == -1)
     {
+        // TODO: Does this handle all signals ?
         if (errno == EINTR)
-        return true;
+            return true;
 
         logMsg('e', "[SERVER]", std::strerror(errno));
         return (false);

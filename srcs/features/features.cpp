@@ -1,34 +1,46 @@
 #include "../../include/main.hpp"
 
-static bool sendIrcReply(ClientData &clientData, const std::string &reply){
-    std::string line = reply + "\r\n";
-    ssize_t bytesSent = send(clientData.poll.fd, line.c_str(), line.size(), 0);
+static bool sendIrcFormattedMsg(ClientData &clientData, std::string msg){
 
-    if (bytesSent != static_cast<ssize_t>(line.size())){
+    // Add protocol message termination syntax
+    msg += "\r\n";
+
+    // Send the message
+    ssize_t bytesSent = send(clientData.poll.fd, msg.c_str(), msg.size(), 0);
+    if (bytesSent != static_cast<ssize_t>(msg.size())){
         logMsg('e', "Failed to send IRC response to:", clientData.username);
         return (false);
     }
     return (true);
 }
 
-static void sendRegistrationResponse(ClientData &clientData){
-    std::string welcome = ":localhost 001 " + clientData.username + " :Welcome to the IRC Network " + clientData.username;
-    sendIrcReply(clientData, welcome);
+// Broadcast the message to every user in a channel + log sender
+static void broadcastChannelNotice(ClientData &clientData, const std::vector<int> &channelMembersSockets, const std::string &target, const std::string &msg){
+
+    broadcastMsg(clientData, channelMembersSockets, target, msg);
+    if (sendPrivmsg(clientData, clientData.poll.fd, target, msg))
+        logMsg('e', std::string(clientData.username + " failed to receive channel message"), target);
 }
 
 static void checkToggleRegistration(ClientData &clientData){
     
+    // Return if user is arleady registered
     if (clientData.isRegistered)
         return;
+
+    // Check if the user has a complete profile
     else if (clientData.hasUsername && clientData.hasName && clientData.passwordAccepted){
         clientData.isRegistered = true;
         logMsg('i', std::string (clientData.username + " is now registered."), "");
-        sendRegistrationResponse(clientData);
+        
+        // Send IRC registration validation
+        sendIrcFormattedMsg(clientData, std::string(":localhost 001 " + clientData.username + " :Welcome to the IRC Network " + clientData.username));
     }
-    
 }
 
 static void handlePASS (server &server, ClientData &clientData, std::vector<std::string> tokens){
+
+    // Check if the provided password is valid
     if (server.checkPassword(tokens[1])){
         clientData.passwordAccepted = true;
         logMsg('i', "Password accepted for client:", clientData.username);
@@ -36,6 +48,7 @@ static void handlePASS (server &server, ClientData &clientData, std::vector<std:
         checkToggleRegistration(clientData);
     }
     else {
+        // Log errors
         logMsg('e', "Invalid password provided by client:", clientData.username);
         sendMsg(clientData, clientData.poll.fd, " Invalid password, try again");
     }
@@ -43,9 +56,11 @@ static void handlePASS (server &server, ClientData &clientData, std::vector<std:
 
 static void handleNICK (ClientData &clientData, std::vector<std::string> tokens){
     
+    // Check if the new username == current username
     if (clientData.username == tokens[1])
         return;
 
+    // Change the username
     std::string msg = "Username: " + clientData.username + " changed to:";
     clientData.username = tokens[1];
     clientData.hasUsername = true;
@@ -53,9 +68,11 @@ static void handleNICK (ClientData &clientData, std::vector<std::string> tokens)
     logMsg('i', msg, clientData.username);
     sendMsg(clientData, clientData.poll.fd, std::string(" Your username is now " + clientData.username));
 
+    // Check if the user has fully completed registration
     checkToggleRegistration(clientData);
 }
 
+// TODO: Needs rework (command is named userhost according to logs)
 static void handleUSER (ClientData &clientData, std::vector<std::string> tokens){
     
     std::string fullName;
@@ -84,46 +101,68 @@ static void handleUSER (ClientData &clientData, std::vector<std::string> tokens)
 
 static void handleCAP(ClientData &clientData, const std::vector<std::string> &tokens){
 
+    // Capabilities are optional protocol features such as messages tags, account related notifications, etc.. 
+
+    // Check if there is enough arguments for that specific command
     if (tokens.size() < 2)
         return;
 
+    // If the client is registered, use his name instead
     std::string target = clientData.isRegistered ? clientData.username : "*";
+
+    // LS asks for the server list of capabilities
     if (tokens[1] == "LS")
-        sendIrcReply(clientData, ":localhost CAP " + target + " LS :");
+        sendIrcFormattedMsg(clientData, ":localhost CAP " + target + " LS :");
+
+    // Lists asks for a list of the currently active capabilities
     else if (tokens[1] == "LIST")
-        sendIrcReply(clientData, ":localhost CAP " + target + " LIST :");
-    else if (tokens[1] == "REQ"){
+        sendIrcFormattedMsg(clientData, ":localhost CAP " + target + " LIST :");
+    
+    // REQ asks for a capability to be turned on/off
+    else if (tokens[1] == "REQ")
+    {
         std::string requestedCaps;
+        
+        // Build a string with all the requested capabilities + NAK (NAK == rejection)
         for (size_t i = 2; i < tokens.size(); ++i){
             if (!requestedCaps.empty())
                 requestedCaps += ' ';
             requestedCaps += tokens[i];
         }
+
+        // Remove the leading : used by irc to mark a trailing parameter
         if (!requestedCaps.empty() && requestedCaps[0] == ':')
             requestedCaps.erase(0, 1);
-        sendIrcReply(clientData, ":localhost CAP " + target + " NAK :" + requestedCaps);
+        
+        // Send message
+        sendIrcFormattedMsg(clientData, ":localhost CAP " + target + " NAK :" + requestedCaps);
     }
 }
 
-
+// Handle JOIN command for channels
 static void handleJOIN (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
+    // Check for client registration 
     if (!clientData.isRegistered){
         logMsg('e', std::string (clientData.username + " must be registered to join channels"), "");
         return;
     }
 
+    // Check that enough parameters are provided for that specific command
     if (tokens.size() < 2){
         sendMsg(clientData, clientData.poll.fd, std::string("Not enough parameters for JOIN"));
         return ;
     }
 
+    // Remove the # at index 0 from the channel name if there is any
     if (!tokens[1].empty() && tokens[1][0] == '#')
             tokens[1].erase(0, 1);
 
+    // Try to Retrieve the channel info, returns a empty channel object if it doesn't exist 
     Channel &targetChannel = server.getChannelInfo(tokens[1]);
     if (!targetChannel.name.empty())
     {
+        // Iterate trough the channel members and check if the current user is arleady in the channel
         for (size_t j = 0; j < targetChannel.members.size(); j++){
             if (clientData.poll.fd == targetChannel.members[j])
             {
@@ -133,28 +172,38 @@ static void handleJOIN (server &server, ClientData &clientData, std::vector<std:
             }
         }
     
+        // Check if the channel is password locked, and if there is enough arguments and that it's not empty
         if (targetChannel.isPasswordLocked && (tokens.size() < 3 || tokens[2].empty()))
         {
             logMsg('e', std::string(clientData.username + " attempted to join the password locked channel" + tokens[1] + "without providing a password"), "");
             sendMsg(clientData, clientData.poll.fd, std::string(" Channel " + tokens[1] + " is password protected"));
             return ;
         }   
+
+        // Check if the provided password is corresponding to the channel password
         else if (targetChannel.isPasswordLocked && targetChannel.password != tokens[2])
         {
             logMsg('e', std::string(clientData.username + " provided an invalid password for channel " + tokens[1]), "");
             sendMsg(clientData, clientData.poll.fd, std::string(" Access denied: invalid password for channel " + tokens[1]));
             return ;
         }
+
+        // Password is correct, add the user to the channel members and log it
         else 
         {
             targetChannel.members.push_back(clientData.poll.fd);
-            broadcastMsg(clientData, targetChannel.members, std::string (" " + clientData.username + " joined the " + tokens[1] + " channel"));
+            const std::string channelTarget = "#" + targetChannel.name;
+            const std::string notice = clientData.username + " joined the " + targetChannel.name + " channel";
+            broadcastChannelNotice(clientData, targetChannel.members, channelTarget, notice);
             logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");
             return ;
         }
     }
+    
+    // If the channel doesn't exist, create it
     else 
     {
+        // Create a new channel object with default settings and add it to the channels list
         Channel newChannel;
 
         newChannel.currentUsers = 1;
@@ -170,7 +219,9 @@ static void handleJOIN (server &server, ClientData &clientData, std::vector<std:
         newChannel.members.push_back(clientData.poll.fd);
         server.addNewChannel(newChannel);
         
-        broadcastMsg(clientData, newChannel.members, std::string (" " + clientData.username + " joined the " + tokens[1] + " channel"));
+        const std::string channelTarget = "#" + newChannel.name;
+        const std::string notice = clientData.username + " joined the " + newChannel.name + " channel";
+        broadcastChannelNotice(clientData, newChannel.members, channelTarget, notice);
         logMsg('i', std::string (clientData.username + " Created channel " + tokens[1]), "");        
         logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");        
     }
@@ -178,38 +229,61 @@ static void handleJOIN (server &server, ClientData &clientData, std::vector<std:
     return ;
 }
 
-
+// Handles privates messages sent to client and channels
 static void handlePRIVMSG (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
+    // Check for client registration
     if (!clientData.isRegistered){
         logMsg('e', std::string (clientData.username + " must be registered to send messages"), "");
         return;
     }
 
-    // TODO: Ne plus stocker les channels avec #
+    // Check that enough parameters are provided for that specific command
+    if (tokens.size() < 3){
+        sendMsg(clientData, clientData.poll.fd, " Not enough parameters for PRIVMSG");
+        return;
+    }
+
+    // Store the receiver name and remove the # at index 0 if there is any
+    std::string target = tokens[1];
     if (!tokens[1].empty() && tokens[1][0] == '#')
             tokens[1].erase(0, 1);
 
+    // Build the entire message 
     std::string msg;
-    for (size_t i = 2; i < tokens.size(); i++)
-        msg += tokens[i] + ' ';
+    for (size_t i = 2; i < tokens.size(); i++){
+        if (i > 2)
+            msg += ' ';
+        msg += tokens[i];
+    }
 
+    if (!msg.empty() && msg[0] == ':')
+        msg.erase(0, 1);
+
+    // Tries to find a USER corresponding to the target, returns the socket on success, and -1 on failure
     int contactSocket = server.getContactSocket(tokens[1]);
+
+    // If no USER is found, search for a channel
     if (contactSocket == -1)
     {
+        // Try to retrieve the list of users for the target channel
         std::vector<int> channelMembers = server.getChannelMembers(tokens[1]);
        
+        // If the channel has no member, it means that it's non existing
+        // #TODO: A channel having a empty member lists doesn't necessarly mean it doesn't exist, unless we delete the channel when everyone leaves
         if (channelMembers.empty())
             logMsg('e', std::string (clientData.username + " could not find user/channel named: " + tokens[1]), "");
+
+        // Send the message to every member in the channel
         else {
-            msg.insert(0, std::string ("[" + tokens[1] + "]: "));
-            broadcastMsg(clientData, channelMembers, msg);
+            broadcastMsg(clientData, channelMembers, target, msg);
             logMsg('i', std::string (clientData.username + " has sent a message in " + tokens[1]), "");
         }
         return;
     }
 
-    if (sendMsg(clientData, contactSocket, msg) || sendMsg(clientData, clientData.poll.fd, msg)){
+    // Try to send the message to the user
+    if (sendPrivmsg(clientData, contactSocket, target, msg) || sendPrivmsg(clientData, clientData.poll.fd, target, msg)){
         logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");
         return ;
     }
@@ -255,7 +329,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
                 {
                     currentChannel.inviteOnly = true;
                     logMsg('i', std::string ("Channel " + tokens[1] + " has been set to invite only by " + clientData.username), "");
-                    broadcastMsg(clientData, currentChannel.members, std::string(" This channel is now invite only"));                    
+                    broadcastChannelNotice(clientData, currentChannel.members, "#" + currentChannel.name, "This channel is now invite only");
                 }
                 else 
                 {
@@ -269,7 +343,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
                 {
                     currentChannel.inviteOnly = false;
                     logMsg('i', std::string ("Channel " + tokens[1] + " has been set to open by " + clientData.username), "");
-                    broadcastMsg(clientData, currentChannel.members, std::string(" This channel is now open"));
+                    broadcastChannelNotice(clientData, currentChannel.members, "#" + currentChannel.name, "This channel is now open");
                     return ;        
                 }
                 else 
@@ -298,7 +372,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
                         currentChannel.isPasswordLocked = true;
                         currentChannel.password = tokens[3];
                         logMsg('i', std::string ("Channel " + tokens[1] + " has been password locked by " + clientData.username), "");
-                        broadcastMsg(clientData, currentChannel.members, std::string(" This channel is now password locked"));
+                        broadcastChannelNotice(clientData, currentChannel.members, "#" + currentChannel.name, "This channel is now password locked");
                         return ;                
                     }
                 }
@@ -315,7 +389,7 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
                     currentChannel.password = "";
                     currentChannel.isPasswordLocked = false;
                     logMsg('i', std::string ("Channel " + tokens[1] + " has been password unlocked by " + clientData.username), "");
-                    broadcastMsg(clientData, currentChannel.members, std::string(" This channel is not password locked anymore"));
+                    broadcastChannelNotice(clientData, currentChannel.members, "#" + currentChannel.name, "This channel is not password locked anymore");
                 }
                 else 
                 {
@@ -355,17 +429,16 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
 }
     
 
-// static void handlePING (ClientData &clientData){
+// static void handlePING (ClientData &clientData){}
 
-//     send(clientData.poll.fd, &clientData.buffer, )
-// }
-
+// Parse and handle commands
 void handleCommands(server &server, ClientData &clientData, std::string cmd){
 
     std::istringstream iss(cmd);
     std::string token;
     std::vector<std::string> tokens;
 
+    // Split the cmd parameter into multiple strings using space separator
     while (iss >> token)
         tokens.push_back(token);
 
