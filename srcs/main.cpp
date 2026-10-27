@@ -16,5 +16,6 @@ int main(int argc, const char **argv){
         if (!ircServer.run())
             break;
    
+    // TODO: Close all sockets functions
     return (0);
 }

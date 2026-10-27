@@ -426,10 +426,34 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
         sendMsg(clientData, clientData.poll.fd, std::string("Channel " + tokens[1] + " doesn't exist"));
         return ;
     }
-}
-    
+}  
 
-// static void handlePING (ClientData &clientData){}
+static void handlePING(ClientData &clientData, const std::vector<std::string> &tokens){
+
+    // Origin == the msg that needs to be sent back with PONG
+    
+    // Check if a origin is provided (409 == ERR_NOORIGIN) 
+    if (tokens.size() < 2){
+        const std::string target = clientData.isRegistered ? clientData.username : "*";
+        sendIrcFormattedMsg(clientData, ":localhost 409 " + target + " :No origin specified");
+        return ;
+    }
+
+    // Build the response
+    std::string origin;
+    for (size_t i = 1; i < tokens.size(); ++i){
+        if (i > 1)
+            origin += ' ';
+        origin += tokens[i];
+    }
+
+    // Remove the leading : used by irc to mark a trailing parameter
+    if (!origin.empty() && origin[0] == ':')
+        origin.erase(0, 1);
+
+    // Send response
+    sendIrcFormattedMsg(clientData, ":localhost PONG localhost :" + origin);
+}
 
 // Parse and handle commands
 void handleCommands(server &server, ClientData &clientData, std::string cmd){
@@ -437,6 +461,8 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
     std::istringstream iss(cmd);
     std::string token;
     std::vector<std::string> tokens;
+
+    std::cout << "FULL COMMAND RECEIVED = " << cmd << std::endl;
 
     // Split the cmd parameter into multiple strings using space separator
     while (iss >> token)
@@ -464,6 +490,8 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
         //     handleTOPIC(clientData, tokens);
         else if (tokens[0] == "MODE")
             handleMODE(server, clientData, tokens);
+        else if (tokens[0] == "PING")
+            handlePING(clientData, tokens);
         else
             logMsg('w', "Unknown command: ", tokens[0]);
     }
