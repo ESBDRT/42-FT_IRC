@@ -72,9 +72,10 @@ static void handleNICK (ClientData &clientData, std::vector<std::string> tokens)
     checkToggleRegistration(clientData);
 }
 
-// TODO: Needs rework (command is named userhost according to logs)
+// Sets the provided username and name
 static void handleUSER (ClientData &clientData, std::vector<std::string> tokens){
-    
+
+    // Build the full name, as it can have spaces
     std::string fullName;
     size_t i = 4;
     while (i < tokens.size())
@@ -88,14 +89,18 @@ static void handleUSER (ClientData &clientData, std::vector<std::string> tokens)
             fullName += ' ';
     }
 
+    // Sets username
     handleNICK(clientData, tokens);
 
+    // Log name changes
     std::string msg = "Name: " + clientData.name + " changed to:";
     clientData.name = fullName;
     clientData.hasName = true;
     
     sendMsg(clientData, clientData.poll.fd, std::string(" Your name is now " + clientData.name));
     logMsg('i', msg, clientData.name);
+
+    // Check if user completed registration
     checkToggleRegistration(clientData);
 }
 
@@ -422,8 +427,8 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
         }
     }
     else {
-        logMsg('e', std::string (clientData.username + " tried" + tokens[2] + " on channel " + tokens[1] + " but channel doesn't exist"), "");
-        sendMsg(clientData, clientData.poll.fd, std::string("Channel " + tokens[1] + " doesn't exist"));
+        logMsg('e', std::string (clientData.username + " tried " + tokens[2] + " on channel " + tokens[1] + " but channel doesn't exist"), "");
+        sendMsg(clientData, clientData.poll.fd, std::string(" Channel " + tokens[1] + " doesn't exist"));
         return ;
     }
 }  
