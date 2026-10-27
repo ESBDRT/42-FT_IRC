@@ -1,5 +1,21 @@
 #include "../../include/main.hpp"
 
+static bool sendIrcReply(ClientData &clientData, const std::string &reply){
+    std::string line = reply + "\r\n";
+    ssize_t bytesSent = send(clientData.poll.fd, line.c_str(), line.size(), 0);
+
+    if (bytesSent != static_cast<ssize_t>(line.size())){
+        logMsg('e', "Failed to send IRC response to:", clientData.username);
+        return (false);
+    }
+    return (true);
+}
+
+static void sendRegistrationResponse(ClientData &clientData){
+    std::string welcome = ":localhost 001 " + clientData.username + " :Welcome to the IRC Network " + clientData.username;
+    sendIrcReply(clientData, welcome);
+}
+
 static void checkToggleRegistration(ClientData &clientData){
     
     if (clientData.isRegistered)
@@ -7,7 +23,7 @@ static void checkToggleRegistration(ClientData &clientData){
     else if (clientData.hasUsername && clientData.hasName && clientData.passwordAccepted){
         clientData.isRegistered = true;
         logMsg('i', std::string (clientData.username + " is now registered."), "");
-        sendMsg(clientData, clientData.poll.fd, " You are now registered");
+        sendRegistrationResponse(clientData);
     }
     
 }
@@ -21,7 +37,7 @@ static void handlePASS (server &server, ClientData &clientData, std::vector<std:
     }
     else {
         logMsg('e', "Invalid password provided by client:", clientData.username);
-        sendMsg(clientData, clientData.poll.fd, "Invalid password, try again");
+        sendMsg(clientData, clientData.poll.fd, " Invalid password, try again");
     }
 }
 
@@ -66,9 +82,27 @@ static void handleUSER (ClientData &clientData, std::vector<std::string> tokens)
     checkToggleRegistration(clientData);
 }
 
-static void handleCAP(ClientData &clientData){
-    if (sendMsg(clientData, clientData.poll.fd, " This server does not support CAP capabilities"))
-        logMsg('e', "Failed to send CAP response to:", clientData.username);
+static void handleCAP(ClientData &clientData, const std::vector<std::string> &tokens){
+
+    if (tokens.size() < 2)
+        return;
+
+    std::string target = clientData.isRegistered ? clientData.username : "*";
+    if (tokens[1] == "LS")
+        sendIrcReply(clientData, ":localhost CAP " + target + " LS :");
+    else if (tokens[1] == "LIST")
+        sendIrcReply(clientData, ":localhost CAP " + target + " LIST :");
+    else if (tokens[1] == "REQ"){
+        std::string requestedCaps;
+        for (size_t i = 2; i < tokens.size(); ++i){
+            if (!requestedCaps.empty())
+                requestedCaps += ' ';
+            requestedCaps += tokens[i];
+        }
+        if (!requestedCaps.empty() && requestedCaps[0] == ':')
+            requestedCaps.erase(0, 1);
+        sendIrcReply(clientData, ":localhost CAP " + target + " NAK :" + requestedCaps);
+    }
 }
 
 
@@ -83,6 +117,9 @@ static void handleJOIN (server &server, ClientData &clientData, std::vector<std:
         sendMsg(clientData, clientData.poll.fd, std::string("Not enough parameters for JOIN"));
         return ;
     }
+
+    if (!tokens[1].empty() && tokens[1][0] == '#')
+            tokens[1].erase(0, 1);
 
     Channel &targetChannel = server.getChannelInfo(tokens[1]);
     if (!targetChannel.name.empty())
@@ -149,6 +186,7 @@ static void handlePRIVMSG (server &server, ClientData &clientData, std::vector<s
         return;
     }
 
+    // TODO: Ne plus stocker les channels avec #
     if (!tokens[1].empty() && tokens[1][0] == '#')
             tokens[1].erase(0, 1);
 
@@ -334,7 +372,7 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
     if (tokens.size() > 0)
     {
         if (tokens[0] == "CAP")
-            handleCAP(clientData);
+            handleCAP(clientData, tokens);
         else if (tokens[0] == "PASS" && tokens.size() == 2)
             handlePASS(server, clientData, tokens);        
         else if (tokens[0] == "NICK" && tokens.size() == 2)
