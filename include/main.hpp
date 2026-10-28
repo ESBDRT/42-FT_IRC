@@ -16,7 +16,11 @@
 #include <unistd.h>
 #include <vector>
 #include <poll.h>
+#include <csignal>
 #include "serverClass.hpp"
+
+// Set by the signal handler when the server must shut down
+extern volatile sig_atomic_t g_shutdown;
 
 // ----------------------------------|DEFINES|---------------------------------- //
 

@@ -180,7 +180,7 @@ bool server::run(){
     // If poll failed
     else if (pollResult == -1)
     {
-        // TODO: Does this handle all signals ?
+        // Interrupted by a signal, main checks g_shutdown to know if the server must stop
         if (errno == EINTR)
             return true;
 
