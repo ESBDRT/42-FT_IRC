@@ -45,6 +45,14 @@ bool server::initialize(const char *str_port, const std::string &password){
     if (serverSocket == -1)
         return (display_err("socket: " + std::string(std::strerror(errno))), false);
 
+    // Allow the port to be reused right after a restart, instead of waiting for TIME_WAIT to expire
+    int reuse = 1;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1){
+        display_err("setsockopt: " + std::string(std::strerror(errno)));
+        close(serverSocket);
+        return (false);
+    }
+
     // Make the socket non blocking
     if (set_nonblocking(serverSocket)){
         close(serverSocket);
@@ -87,6 +95,7 @@ bool server::initialize(const char *str_port, const std::string &password){
     servData.buffer = "";
     servData.username = "SERVER";
     servData.name = "SERVER";
+    servData.user = "SERVER";
     servData.poll = servPoll;
     servData.hasName = true;
     servData.hasUsername = true;
