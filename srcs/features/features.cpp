@@ -255,7 +255,109 @@ static void handleCAP(ClientData &clientData, const std::vector<std::string> &to
     }
 }
 
-// Handle JOIN command for channels
+// Channel lists (ex: "JOIN #a,#b") are not supported, returns true if the parameter is a list and has been refused (476 == ERR_BADCHANMASK)
+// The refusal is sent for each channel of the list, irssi waits for an answer per channel and would never retry the command otherwise
+static bool refuseChannelList(ClientData &clientData, const std::string &channels, const std::string &command){
+
+    if (channels.find(',') == std::string::npos)
+        return (false);
+
+    logMsg('e', std::string (clientData.username + " tried to " + command + " several channels at once:"), channels);
+
+    std::istringstream channelList(channels);
+    std::string channelName;
+    while (std::getline(channelList, channelName, ','))
+        if (!channelName.empty())
+            sendNumeric(clientData, "476", channelName + " :Bad Channel Mask, only one channel at a time");
+    return (true);
+}
+
+// Join a single channel, or create it if it doesn't exist
+static void joinChannel(server &server, ClientData &clientData, std::string channelName, const std::string &key){
+
+    // Remove the # at index 0 from the channel name if there is any (403 == ERR_NOSUCHCHANNEL)
+    if (!channelName.empty() && channelName[0] == '#')
+        channelName.erase(0, 1);
+    if (channelName.empty()){
+        sendNumeric(clientData, "403", "# :No such channel");
+        return ;
+    }
+
+    const std::string channelTarget = "#" + channelName;
+
+    // Try to Retrieve the channel info, returns a empty channel object if it doesn't exist
+    Channel &targetChannel = server.getChannelInfo(channelName);
+    if (!targetChannel.name.empty())
+    {
+        // Check if the current user is arleady in the channel, IRC servers silently ignore it
+        if (isMember(targetChannel, clientData.poll.fd)){
+            logMsg('e', std::string(clientData.username + " is arleady in the channel"), channelName);
+            return ;
+        }
+
+        // Check if the channel is password locked, and if the provided password is corresponding (475 == ERR_BADCHANNELKEY)
+        if (targetChannel.isPasswordLocked && targetChannel.password != key)
+        {
+            logMsg('e', std::string(clientData.username + " provided a missing or invalid password for channel " + channelName), "");
+            sendNumeric(clientData, "475", channelTarget + " :Cannot join channel (+k)");
+            return ;
+        }
+
+        // Check if the channel is invite only and if the user has been invited (473 == ERR_INVITEONLYCHAN)
+        else if (targetChannel.inviteOnly && !isInvited(targetChannel, clientData.poll.fd))
+        {
+            logMsg('e', std::string(clientData.username + " tried to join the invite only channel " + channelName + " without an invite"), "");
+            sendNumeric(clientData, "473", channelTarget + " :Cannot join channel (+i)");
+            return ;
+        }
+
+        // Check if the channel is full (471 == ERR_CHANNELISFULL)
+        else if (targetChannel.userLimit && targetChannel.members.size() >= targetChannel.maxUsers)
+        {
+            logMsg('e', std::string(clientData.username + " tried to join the full channel " + channelName), "");
+            sendNumeric(clientData, "471", channelTarget + " :Cannot join channel (+l)");
+            return ;
+        }
+
+        // Every check passed, add the user to the channel members, consume the invite and log it
+        else
+        {
+            targetChannel.members.push_back(clientData.poll.fd);
+            removeInvite(targetChannel, clientData.poll.fd);
+            sendJoinReplies(server, clientData, targetChannel);
+            logMsg('i', std::string (clientData.username + " joined the " + channelName + " channel"), "");
+            return ;
+        }
+    }
+    
+    // If the channel doesn't exist, create it
+    else 
+    {
+        // Create a new channel object with default settings and add it to the channels list
+        Channel newChannel;
+
+        newChannel.currentUsers = 1;
+        newChannel.inviteOnly = false;
+        newChannel.isPasswordLocked = false;
+        newChannel.maxUsers = 10;
+        newChannel.name = channelName;
+        newChannel.operators.push_back(clientData.poll.fd);
+        newChannel.password = "";
+        newChannel.restrictedTopic = false;
+        newChannel.topic = "";
+        newChannel.userLimit = false;
+        newChannel.members.push_back(clientData.poll.fd);
+        server.addNewChannel(newChannel);
+
+        sendJoinReplies(server, clientData, newChannel);
+        logMsg('i', std::string (clientData.username + " Created channel " + channelName), "");        
+        logMsg('i', std::string (clientData.username + " joined the " + channelName + " channel"), "");        
+    }
+
+    return ;
+}
+
+// Handle JOIN command for channels: JOIN <#channel> [<key>], only one channel at a time
 static void handleJOIN (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
     // Check for client registration (451 == ERR_NOTREGISTERED)
@@ -271,82 +373,11 @@ static void handleJOIN (server &server, ClientData &clientData, std::vector<std:
         return ;
     }
 
-    // Remove the # at index 0 from the channel name if there is any
-    if (!tokens[1].empty() && tokens[1][0] == '#')
-            tokens[1].erase(0, 1);
+    // Refuse channel lists instead of creating a channel named "a,#b"
+    if (refuseChannelList(clientData, tokens[1], "join"))
+        return ;
 
-    const std::string channelTarget = "#" + tokens[1];
-
-    // Try to Retrieve the channel info, returns a empty channel object if it doesn't exist
-    Channel &targetChannel = server.getChannelInfo(tokens[1]);
-    if (!targetChannel.name.empty())
-    {
-        // Check if the current user is arleady in the channel, IRC servers silently ignore it
-        if (isMember(targetChannel, clientData.poll.fd)){
-            logMsg('e', std::string(clientData.username + " is arleady in the channel"), tokens[1]);
-            return ;
-        }
-
-        // Check if the channel is password locked, and if the provided password is corresponding (475 == ERR_BADCHANNELKEY)
-        if (targetChannel.isPasswordLocked && (tokens.size() < 3 || targetChannel.password != tokens[2]))
-        {
-            logMsg('e', std::string(clientData.username + " provided a missing or invalid password for channel " + tokens[1]), "");
-            sendNumeric(clientData, "475", channelTarget + " :Cannot join channel (+k)");
-            return ;
-        }
-
-        // Check if the channel is invite only and if the user has been invited (473 == ERR_INVITEONLYCHAN)
-        else if (targetChannel.inviteOnly && !isInvited(targetChannel, clientData.poll.fd))
-        {
-            logMsg('e', std::string(clientData.username + " tried to join the invite only channel " + tokens[1] + " without an invite"), "");
-            sendNumeric(clientData, "473", channelTarget + " :Cannot join channel (+i)");
-            return ;
-        }
-
-        // Check if the channel is full (471 == ERR_CHANNELISFULL)
-        else if (targetChannel.userLimit && targetChannel.members.size() >= targetChannel.maxUsers)
-        {
-            logMsg('e', std::string(clientData.username + " tried to join the full channel " + tokens[1]), "");
-            sendNumeric(clientData, "471", channelTarget + " :Cannot join channel (+l)");
-            return ;
-        }
-
-        // Every check passed, add the user to the channel members, consume the invite and log it
-        else
-        {
-            targetChannel.members.push_back(clientData.poll.fd);
-            removeInvite(targetChannel, clientData.poll.fd);
-            sendJoinReplies(server, clientData, targetChannel);
-            logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");
-            return ;
-        }
-    }
-    
-    // If the channel doesn't exist, create it
-    else 
-    {
-        // Create a new channel object with default settings and add it to the channels list
-        Channel newChannel;
-
-        newChannel.currentUsers = 1;
-        newChannel.inviteOnly = false;
-        newChannel.isPasswordLocked = false;
-        newChannel.maxUsers = 10;
-        newChannel.name = tokens[1];
-        newChannel.operators.push_back(clientData.poll.fd);
-        newChannel.password = "";
-        newChannel.restrictedTopic = false;
-        newChannel.topic = "";
-        newChannel.userLimit = false;
-        newChannel.members.push_back(clientData.poll.fd);
-        server.addNewChannel(newChannel);
-
-        sendJoinReplies(server, clientData, newChannel);
-        logMsg('i', std::string (clientData.username + " Created channel " + tokens[1]), "");        
-        logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");        
-    }
-
-    return ;
+    joinChannel(server, clientData, tokens[1], tokens.size() > 2 ? tokens[2] : "");
 }
 
 // Handles privates messages sent to client and channels
