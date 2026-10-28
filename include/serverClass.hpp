@@ -13,8 +13,9 @@ class ClientData {
 
         struct pollfd   poll;
         std::string     buffer;
-        std::string     name;
-        std::string     username;
+        std::string     name;       // Realname, set by USER
+        std::string     username;   // Nickname, set by NICK
+        std::string     user;       // Username, set by USER (used in the nick!user@host prefix)
         bool            hasName;
         bool            hasUsername;
         bool            passwordAccepted;

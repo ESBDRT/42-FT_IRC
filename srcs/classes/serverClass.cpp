@@ -2,7 +2,7 @@
 #include <unistd.h>
 
 ClientData::ClientData()
-    : buffer(), name(), username(), hasName(false), hasUsername(false),
+    : buffer(), name(), username(), user(), hasName(false), hasUsername(false),
       passwordAccepted(false), isRegistered(false){
     poll.fd = -1;
     poll.events = 0;
@@ -11,7 +11,7 @@ ClientData::ClientData()
 
 ClientData::ClientData(const ClientData &other)
     : poll(other.poll), buffer(other.buffer), name(other.name),
-      username(other.username), hasName(other.hasName),
+      username(other.username), user(other.user), hasName(other.hasName),
       hasUsername(other.hasUsername), passwordAccepted(other.passwordAccepted),
       isRegistered(other.isRegistered){
 }
@@ -22,6 +22,7 @@ ClientData &ClientData::operator=(const ClientData &other){
         buffer = other.buffer;
         name = other.name;
         username = other.username;
+        user = other.user;
         hasName = other.hasName;
         hasUsername = other.hasUsername;
         passwordAccepted = other.passwordAccepted;

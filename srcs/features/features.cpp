@@ -24,7 +24,7 @@ static void sendNumeric(ClientData &clientData, const std::string &code, const s
 
 // Build the source prefix of a message sent by a client (":nick!user@host")
 static std::string userPrefix(const ClientData &clientData){
-    return (":" + clientData.username + "!" + clientData.username + "@localhost");
+    return (":" + clientData.username + "!" + clientData.user + "@localhost");
 }
 
 // Send the same IRC line to every socket of the list, sender included
@@ -106,11 +106,18 @@ static void handlePASS (server &server, ClientData &clientData, std::vector<std:
     }
 }
 
-static void handleNICK (ClientData &clientData, std::vector<std::string> tokens){
-    
+static void handleNICK (server &server, ClientData &clientData, std::vector<std::string> tokens){
+
     // Check if the new username == current username
     if (clientData.username == tokens[1])
         return;
+
+    // Check that no other client is using this nickname (433 == ERR_NICKNAMEINUSE)
+    if (server.getContactSocket(tokens[1]) != -1){
+        logMsg('e', "Nickname already in use:", tokens[1]);
+        sendNumeric(clientData, "433", tokens[1] + " :Nickname is already in use");
+        return;
+    }
 
     // Change the username
     std::string msg = "Username: " + clientData.username + " changed to:";
@@ -124,8 +131,14 @@ static void handleNICK (ClientData &clientData, std::vector<std::string> tokens)
     checkToggleRegistration(clientData);
 }
 
-// Sets the provided username and name
+// Sets the provided username and name, the nickname is only set by NICK
 static void handleUSER (ClientData &clientData, std::vector<std::string> tokens){
+
+    // USER can only be sent once, during registration (462 == ERR_ALREADYREGISTRED)
+    if (clientData.isRegistered){
+        sendNumeric(clientData, "462", ":You may not reregister");
+        return;
+    }
 
     // Build the full name, as it can have spaces
     std::string fullName;
@@ -142,7 +155,7 @@ static void handleUSER (ClientData &clientData, std::vector<std::string> tokens)
     }
 
     // Sets username
-    handleNICK(clientData, tokens);
+    clientData.user = tokens[1];
 
     // Log name changes
     std::string msg = "Name: " + clientData.name + " changed to:";
@@ -543,7 +556,7 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
         else if (tokens[0] == "PASS" && tokens.size() == 2)
             handlePASS(server, clientData, tokens);        
         else if (tokens[0] == "NICK" && tokens.size() == 2)
-            handleNICK(clientData, tokens);
+            handleNICK(server, clientData, tokens);
         else if (tokens[0] == "USER" && tokens.size() >= 5)
             handleUSER(clientData, tokens);
         else if (tokens[0] == "JOIN")

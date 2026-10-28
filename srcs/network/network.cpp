@@ -13,7 +13,7 @@ int sendMsg(ClientData &clientData, int &clientSocket, std::string msg){
 // Send a IRC formatted msg
 int sendPrivmsg(ClientData &clientData, int &clientSocket, const std::string &target, const std::string &msg){
 
-    std::string formatMsg = ":" + clientData.username + "!" + clientData.username + "@localhost PRIVMSG " + target + " :" + msg + "\r\n";
+    std::string formatMsg = ":" + clientData.username + "!" + clientData.user + "@localhost PRIVMSG " + target + " :" + msg + "\r\n";
 
     ssize_t bytesSent = send(clientSocket, formatMsg.c_str(), formatMsg.size(), 0);
 
@@ -130,6 +130,7 @@ bool server::run(){
                     newClientData.buffer = "";
                     newClientData.username = "Default";
                     newClientData.name = "Default";
+                    newClientData.user = "Default";
                     newClientData.hasName = false;
                     newClientData.hasUsername = false;
                     newClientData.passwordAccepted = false;
