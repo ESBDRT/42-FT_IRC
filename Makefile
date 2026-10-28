@@ -17,7 +17,7 @@ $(NAME): $(OBJECTS)
 	@echo -e "$(CLR_GREEN)[PROJECT $(NAME) COMPILATION SUCCESS]$(CLR_RST)"
 
 %.o: %.cpp
-	@$(CC) $(CCFLAGS) -c $< -o $@
+	@$(C++) $(CCFLAGS) -c $< -o $@
 	@echo -e "$(CLR_BLUE)[COMPILED] $(CLR_RST)$<"
 
 clean:
