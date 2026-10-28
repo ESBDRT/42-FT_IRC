@@ -44,6 +44,9 @@ void logMsg(char lvl, std::string msg, std::string arg);
 // Output the err message passed in parameter in stderr
 void display_err(std::string err);
 
+// Remove the socket from the members and operators lists of every channel
+void removeSocketFromChannels(server &server, int socket);
+
 
 // ----------------------------------|NETWORK|---------------------------------- //
 

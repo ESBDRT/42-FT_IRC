@@ -100,8 +100,8 @@ bool server::run(){
                 if (i == 0)                                                                     
                     return (false);
                 
-                // Delete the client
-                // TODO: Investigate potential issue here, should also delete from pollfds vector ?
+                // Delete the client (pollFds is rebuilt on every run() call, no need to remove it there)
+                removeSocketFromChannels(*this, _clients[i].poll.fd);
                 _clients.erase(_clients.begin() + i);
                 continue;
             }
@@ -148,7 +148,8 @@ bool server::run(){
                     // 0 = Disconnected gracefully | -1 = Something went wrong
                     if (readResult == 0 || readResult == -1){
                         
-                        // Close socket and remove client
+                        // Remove from channels, close socket and remove client
+                        removeSocketFromChannels(*this, _clients[i].poll.fd);
                         close(_clients[i].poll.fd);
                         _clients.erase(_clients.begin() + i);
                         continue;
@@ -165,6 +166,7 @@ bool server::run(){
 
                 // Log errors and close + remove client
                 logMsg('e', "[SERVER]", "Client hangup or socket error");
+                removeSocketFromChannels(*this, _clients[i].poll.fd);
                 close(_clients[i].poll.fd);
                 _clients.erase(_clients.begin() + i);
                 continue;

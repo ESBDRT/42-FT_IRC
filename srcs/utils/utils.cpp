@@ -57,3 +57,27 @@ void logMsg(char lvl, std::string msg, std::string arg){
 void display_err(std::string err){
     std::cerr << CLR_RED << "[ERROR]: " <<  CLR_RST << err << CLR_RST << std::endl;
 }
+
+// Remove every occurence of the socket from the provided vector
+static void removeSocketFromVector(std::vector<int> &sockets, int socket){
+
+    size_t i = 0;
+    while (i < sockets.size())
+    {
+        if (sockets[i] == socket)
+            sockets.erase(sockets.begin() + i);
+        else
+            i++;
+    }
+}
+
+// Remove the socket from the members and operators of every channel, must be called before the socket is closed
+void removeSocketFromChannels(server &server, int socket){
+
+    std::vector<Channel> &channels = server.getChannelsList();
+
+    for (size_t i = 0; i < channels.size(); i++){
+        removeSocketFromVector(channels[i].members, socket);
+        removeSocketFromVector(channels[i].operators, socket);
+    }
+}
