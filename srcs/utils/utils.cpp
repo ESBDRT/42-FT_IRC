@@ -72,12 +72,22 @@ static void removeSocketFromVector(std::vector<int> &sockets, int socket){
 }
 
 // Remove the socket from the members and operators of every channel, must be called before the socket is closed
+// Channels left without any member are deleted
 void removeSocketFromChannels(server &server, int socket){
 
     std::vector<Channel> &channels = server.getChannelsList();
 
-    for (size_t i = 0; i < channels.size(); i++){
+    size_t i = 0;
+    while (i < channels.size())
+    {
         removeSocketFromVector(channels[i].members, socket);
         removeSocketFromVector(channels[i].operators, socket);
+
+        if (channels[i].members.empty()){
+            logMsg('i', "Channel deleted, no members left:", channels[i].name);
+            channels.erase(channels.begin() + i);
+        }
+        else
+            i++;
     }
 }

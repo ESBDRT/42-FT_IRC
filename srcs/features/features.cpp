@@ -275,7 +275,7 @@ static void handlePRIVMSG (server &server, ClientData &clientData, std::vector<s
         std::vector<int> channelMembers = server.getChannelMembers(tokens[1]);
        
         // If the channel has no member, it means that it's non existing
-        // #TODO: A channel having a empty member lists doesn't necessarly mean it doesn't exist, unless we delete the channel when everyone leaves
+        // Channels are deleted when their last member leaves, so no members == no channel
         if (channelMembers.empty())
             logMsg('e', std::string (clientData.username + " could not find user/channel named: " + tokens[1]), "");
 
@@ -316,6 +316,10 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
         sendMsg(clientData, clientData.poll.fd, std::string("Not enough parameters for MODE"));
         return ;
     }
+
+    // Remove the # at index 0 from the channel name if there is any
+    if (!tokens[1].empty() && tokens[1][0] == '#')
+            tokens[1].erase(0, 1);
 
     Channel &currentChannel = server.getChannelInfo(tokens[1]);
     if (!currentChannel.name.empty())
@@ -466,8 +470,6 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
     std::istringstream iss(cmd);
     std::string token;
     std::vector<std::string> tokens;
-
-    std::cout << "FULL COMMAND RECEIVED = " << cmd << std::endl;
 
     // Split the cmd parameter into multiple strings using space separator
     while (iss >> token)
