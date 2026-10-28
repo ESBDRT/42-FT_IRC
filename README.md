@@ -36,7 +36,7 @@ make re     # clean and rebuild
 
 ```sh
 ./ircserv <port> <password>
-./ircserv 6667 secret
+./ircserv 3000 secret
 ```
 
 - `port`: the TCP port to listen on (1-65535)
@@ -51,12 +51,11 @@ Stop the server with `Ctrl-C` (or `SIGTERM`/`SIGQUIT`): it closes every connecti
 **With irssi (reference client)**
 
 ```sh
-irssi -n alice                       # start irssi with the nickname alice
+irssi -n alice                       # start irssi -n = nickname
 ```
 ```
-/connect localhost 6667 secret       # irssi sends PASS, NICK and USER for you
+/connect localhost 3000 secret       # irssi sends PASS, NICK and USER for you
 ```
-
 
 ### Commands
 
@@ -158,7 +157,51 @@ Errors:
 - Unknown commands are answered with `421 <command> :Unknown command`.
 - Lines are limited to 512 bytes (`\r\n` included). Longer lines are dropped with `417`.
 
+### Test roadmap
+
+**1. Build**
+
+- Use `Make`
+
+**2. Connection and authentication**
+
+- Launch `irssi -n <name>` on each client
+- Connect to the server using `/connect localhost 3000 secret` on each client
+
+**3. Channels and messages**
+
+- Join a channel with your 3 clients using `/join <#channel>`. Every message typed in the channel should be received by the other users. <br><br>
+-  Send a private message from alice to bob using : `/msg bob hello`. bob receives it in a private window, carol doesn't. <br><br>
+
+**3. Operator commands** (from `alice` in `#test`)
+
+- `/kick carol bye`. Carol should get kicked by Alice <br><br>
+- Set the channel to invite only using : `/mode #test +i`. The other users should not be able to join unless invited <br><br> 
+ Invite carol to the channel and try joining `alice`: `/invite carol` <br><br>
+- `/topic #test Hello`. Everyone sees the new topic. <br> `/mode #test +t`: `bob` can't change it anymore, <br> `/mode #test -t` lets him again. <br><br>
+
+
+- Enable password lock for the channel `/mode +k password`. <br> Try to join the channel : `/join #test` is refused (`Bad channel key`) <br><br>
+- Make bob an operator using : `/op bob`. <br> Test operator commands and remove his operator rights using : `/deop bob`
+- Limit the number of max users in the channel using : `/mode #test +l 2` and try joining with a third client. 
+
+**4. Low bandwidth**
+
+- Suspend `carol` with `Ctrl-Z` while `alice` sends many messages to `#test`. The server and `bob` keep working.
+- Resume `carol` with `fg`. All the messages are received, in order.
+
+**5. Disconnections**
+
+- `carol`: `/quit bye`. The others see `carol has quit [Quit: bye]`.
+- Kill a client (close its terminal). The others see it quit, and the server keeps accepting new clients.
+- `Ctrl-C` on the server: it shuts down cleanly.
+
 ## Resources
+
+https://medium.com/@mohamedsarda/ft-irc-channels-and-command-management-ff1ff3758a0b <br>
+https://medium.com/@afatir.ahmedfatir/small-irc-server-ft-irc-42-network-7cee848de6f9 <br>
+https://irssi.org/documentation/
+
 
 ### AI usage
 
