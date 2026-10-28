@@ -2,24 +2,27 @@
 #include <unistd.h>
 
 ClientData::ClientData()
-    : buffer(), name(), username(), user(), hasName(false), hasUsername(false),
-      passwordAccepted(false), isRegistered(false){
+    : buffer(), outBuffer(), name(), username(), user(), hasName(false), hasUsername(false),
+      passwordAccepted(false), isRegistered(false), discardUntilEol(false), closing(false),
+      quitReason(){
     poll.fd = -1;
     poll.events = 0;
     poll.revents = 0;
 }
 
 ClientData::ClientData(const ClientData &other)
-    : poll(other.poll), buffer(other.buffer), name(other.name),
+    : poll(other.poll), buffer(other.buffer), outBuffer(other.outBuffer), name(other.name),
       username(other.username), user(other.user), hasName(other.hasName),
       hasUsername(other.hasUsername), passwordAccepted(other.passwordAccepted),
-      isRegistered(other.isRegistered){
+      isRegistered(other.isRegistered), discardUntilEol(other.discardUntilEol),
+      closing(other.closing), quitReason(other.quitReason){
 }
 
 ClientData &ClientData::operator=(const ClientData &other){
     if (this != &other){
         poll = other.poll;
         buffer = other.buffer;
+        outBuffer = other.outBuffer;
         name = other.name;
         username = other.username;
         user = other.user;
@@ -27,6 +30,9 @@ ClientData &ClientData::operator=(const ClientData &other){
         hasUsername = other.hasUsername;
         passwordAccepted = other.passwordAccepted;
         isRegistered = other.isRegistered;
+        discardUntilEol = other.discardUntilEol;
+        closing = other.closing;
+        quitReason = other.quitReason;
     }
     return (*this);
 }
@@ -109,6 +115,14 @@ std::string server::getNickname(int clientSocket) const {
 
 // Returns NULL if no client uses that socket, the pointer is invalidated when a client connects or disconnects
 const ClientData *server::getClient(int clientSocket) const {
+
+    for (size_t i = 1; i < this->_clients.size(); i++)
+        if (this->_clients[i].poll.fd == clientSocket)
+            return (&this->_clients[i]);
+    return (NULL);
+}
+
+ClientData *server::getClient(int clientSocket){
 
     for (size_t i = 1; i < this->_clients.size(); i++)
         if (this->_clients[i].poll.fd == clientSocket)

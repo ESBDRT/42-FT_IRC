@@ -1,17 +1,8 @@
 #include "../../include/main.hpp"
 
-static bool sendIrcFormattedMsg(ClientData &clientData, std::string msg){
-
-    // Add protocol message termination syntax
-    msg += "\r\n";
-
-    // Send the message
-    ssize_t bytesSent = send(clientData.poll.fd, msg.c_str(), msg.size(), 0);
-    if (bytesSent != static_cast<ssize_t>(msg.size())){
-        logMsg('e', "Failed to send IRC response to:", clientData.username);
-        return (false);
-    }
-    return (true);
+// Queue an IRC line for the client, the \r\n is added by queueMsg
+static void sendIrcFormattedMsg(ClientData &clientData, const std::string &msg){
+    queueMsg(clientData, msg);
 }
 
 // Send a numeric reply (ex: ":localhost 475 nick #chan :Cannot join channel (+k)")
@@ -27,15 +18,11 @@ static std::string userPrefix(const ClientData &clientData){
     return (":" + clientData.username + "!" + clientData.user + "@localhost");
 }
 
-// Send the same IRC line to every socket of the list, sender included
-static void broadcastIrcLine(const std::vector<int> &sockets, std::string msg){
-
-    // Add protocol message termination syntax
-    msg += "\r\n";
+// Queue the same IRC line for every socket of the list, sender included
+static void broadcastIrcLine(server &server, const std::vector<int> &sockets, const std::string &msg){
 
     for (size_t i = 0; i < sockets.size(); ++i)
-        if (send(sockets[i], msg.c_str(), msg.size(), 0) != static_cast<ssize_t>(msg.size()))
-            logMsg('e', "Failed to broadcast IRC message:", msg.substr(0, msg.size() - 2));
+        server.queueMsg(sockets[i], msg);
 }
 
 // Check if the socket is in the channel members
@@ -98,7 +85,7 @@ static void sendJoinReplies(server &server, ClientData &clientData, Channel &cha
 
     const std::string channelTarget = "#" + channel.name;
 
-    broadcastIrcLine(channel.members, userPrefix(clientData) + " JOIN " + channelTarget);
+    broadcastIrcLine(server, channel.members, userPrefix(clientData) + " JOIN " + channelTarget);
 
     // 332 == RPL_TOPIC
     if (!channel.topic.empty())
@@ -138,21 +125,33 @@ static void checkToggleRegistration(ClientData &clientData){
 
 static void handlePASS (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
+    // Check that a password is provided (461 == ERR_NEEDMOREPARAMS)
+    if (tokens.size() < 2){
+        sendNumeric(clientData, "461", "PASS :Not enough parameters");
+        return;
+    }
+
     // Check if the provided password is valid
     if (server.checkPassword(tokens[1])){
         clientData.passwordAccepted = true;
         logMsg('i', "Password accepted for client:", clientData.username);
-        sendMsg(clientData, clientData.poll.fd, " Password accepted");
+        sendMsg(clientData, " Password accepted");
         checkToggleRegistration(clientData);
     }
     else {
         // Log errors
         logMsg('e', "Invalid password provided by client:", clientData.username);
-        sendMsg(clientData, clientData.poll.fd, " Invalid password, try again");
+        sendMsg(clientData, " Invalid password, try again");
     }
 }
 
 static void handleNICK (server &server, ClientData &clientData, std::vector<std::string> tokens){
+
+    // Check that a nickname is provided (431 == ERR_NONICKNAMEGIVEN)
+    if (tokens.size() < 2){
+        sendNumeric(clientData, "431", ":No nickname given");
+        return;
+    }
 
     // Check if the new username == current username
     if (clientData.username == tokens[1])
@@ -165,13 +164,23 @@ static void handleNICK (server &server, ClientData &clientData, std::vector<std:
         return;
     }
 
+    // Once registered, the change is announced to the user and to everyone sharing a channel with him, using the old nickname as prefix
+    if (clientData.isRegistered){
+        const std::string nickChange = userPrefix(clientData) + " NICK :" + tokens[1];
+        sendIrcFormattedMsg(clientData, nickChange);
+
+        std::vector<int> peers = getChannelPeers(server, clientData.poll.fd);
+        for (size_t i = 0; i < peers.size(); i++)
+            server.queueMsg(peers[i], nickChange);
+    }
+
     // Change the username
     std::string msg = "Username: " + clientData.username + " changed to:";
     clientData.username = tokens[1];
     clientData.hasUsername = true;
     
     logMsg('i', msg, clientData.username);
-    sendMsg(clientData, clientData.poll.fd, std::string(" Your username is now " + clientData.username));
+    sendMsg(clientData, std::string(" Your username is now " + clientData.username));
 
     // Check if the user has fully completed registration
     checkToggleRegistration(clientData);
@@ -183,6 +192,12 @@ static void handleUSER (ClientData &clientData, std::vector<std::string> tokens)
     // USER can only be sent once, during registration (462 == ERR_ALREADYREGISTRED)
     if (clientData.isRegistered){
         sendNumeric(clientData, "462", ":You may not reregister");
+        return;
+    }
+
+    // USER <username> <mode> <unused> :<realname> (461 == ERR_NEEDMOREPARAMS)
+    if (tokens.size() < 5){
+        sendNumeric(clientData, "461", "USER :Not enough parameters");
         return;
     }
 
@@ -208,7 +223,7 @@ static void handleUSER (ClientData &clientData, std::vector<std::string> tokens)
     clientData.name = fullName;
     clientData.hasName = true;
     
-    sendMsg(clientData, clientData.poll.fd, std::string(" Your name is now " + clientData.name));
+    sendMsg(clientData, std::string(" Your name is now " + clientData.name));
     logMsg('i', msg, clientData.name);
 
     // Check if user completed registration
@@ -438,7 +453,7 @@ static void handlePRIVMSG (server &server, ClientData &clientData, std::vector<s
         }
 
         // Send the message to every member in the channel except the sender
-        broadcastMsg(clientData, targetChannel.members, target, msg);
+        broadcastMsg(server, clientData, targetChannel.members, target, msg);
         logMsg('i', std::string (clientData.username + " has sent a message in " + tokens[1]), "");
         return;
     }
@@ -451,11 +466,8 @@ static void handlePRIVMSG (server &server, ClientData &clientData, std::vector<s
         return;
     }
 
-    // Try to send the message to the user, the sender's client displays its own message so it isn't sent back
-    if (sendPrivmsg(clientData, contactSocket, target, msg)){
-        logMsg('e', std::string (clientData.username + " failed to send message, something went wrong.."), "");
-        return ;
-    }
+    // Send the message to the user, the sender's client displays its own message so it isn't sent back
+    sendPrivmsg(server, clientData, contactSocket, target, msg);
 
     logMsg('i', std::string (clientData.username + " has sent a message to " + target), "");
 
@@ -520,7 +532,7 @@ static void handleKICK (server &server, ClientData &clientData, std::vector<std:
         reason = clientData.username;
 
     // Announce the kick to every member, kicked user included, before removing him
-    broadcastIrcLine(targetChannel.members, userPrefix(clientData) + " KICK " + channelTarget + " " + targetNick + " :" + reason);
+    broadcastIrcLine(server, targetChannel.members, userPrefix(clientData) + " KICK " + channelTarget + " " + targetNick + " :" + reason);
     logMsg('i', std::string (clientData.username + " kicked " + targetNick + " from " + tokens[1] + " (" + reason + ")"), "");
 
     // targetChannel must not be used after this call, the channel is deleted if it's now empty
@@ -588,7 +600,7 @@ static void handleINVITE (server &server, ClientData &clientData, std::vector<st
 
     // Confirm to the sender (341 == RPL_INVITING) and notify the invited user
     sendNumeric(clientData, "341", targetNick + " " + channelTarget);
-    broadcastIrcLine(std::vector<int>(1, targetSocket), userPrefix(clientData) + " INVITE " + targetNick + " :" + channelTarget);
+    server.queueMsg(targetSocket, userPrefix(clientData) + " INVITE " + targetNick + " :" + channelTarget);
     logMsg('i', std::string (clientData.username + " invited " + targetNick + " to " + tokens[2]), "");
 }
 
@@ -644,7 +656,7 @@ static void handleTOPIC (server &server, ClientData &clientData, std::vector<std
 
     // Set the new topic ("TOPIC #channel :" clears it) and announce it to every member
     targetChannel.topic = joinTrailing(tokens, 2);
-    broadcastIrcLine(targetChannel.members, userPrefix(clientData) + " TOPIC " + channelTarget + " :" + targetChannel.topic);
+    broadcastIrcLine(server, targetChannel.members, userPrefix(clientData) + " TOPIC " + channelTarget + " :" + targetChannel.topic);
     logMsg('i', std::string (clientData.username + " changed the topic of " + tokens[1] + " to: " + targetChannel.topic), "");
 }
 
@@ -693,7 +705,7 @@ static void handlePART (server &server, ClientData &clientData, std::vector<std:
     std::string partMsg = userPrefix(clientData) + " PART " + channelTarget;
     if (!reason.empty())
         partMsg += " :" + reason;
-    broadcastIrcLine(targetChannel.members, partMsg);
+    broadcastIrcLine(server, targetChannel.members, partMsg);
     logMsg('i', std::string (clientData.username + " left the " + tokens[1] + " channel"), reason);
 
     // targetChannel must not be used after this call, the channel is deleted if it's now empty
@@ -772,21 +784,7 @@ static std::string channelModes(const Channel &channel, bool showKey){
     return (modes + params);
 }
 
-// Add an applied mode to the line that will be broadcast (ex: "+k-o secret bob")
-static void addModeChange(std::string &modes, std::string &params, char &lastSign, char sign, char mode, const std::string &param){
-
-    // Only write the sign when it changes, "+i+t" is written "+it"
-    if (sign != lastSign){
-        modes += sign;
-        lastSign = sign;
-    }
-    modes += mode;
-
-    if (!param.empty())
-        params += " " + param;
-}
-
-// View or change the modes of a channel: MODE <#channel> [<+|-><modes> [params...]]
+// View or change the modes of a channel: MODE <#channel> [<+|-><mode> [param]], one mode at a time
 static void handleMODE (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
     // Check for client registration (451 == ERR_NOTREGISTERED)
@@ -836,165 +834,152 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
         return ;
     }
 
-    // The modes string can combine several modes (ex: "+kl-i secret 10"), k, o and l take their parameter in order from tokens[3]
-    const std::string modeString = tokens[2];
-    size_t paramIndex = 3;
-    char sign = '+';
+    // Only one mode at a time: a sign followed by a single mode letter (ex: "+i", "-k", "+l 10") (472 == ERR_UNKNOWNMODE)
+    const std::string &modeString = tokens[2];
+    if (modeString.size() != 2 || (modeString[0] != '+' && modeString[0] != '-')){
+        logMsg('e', std::string (clientData.username + " tried MODE " + modeString + ": only one mode at a time"), "");
+        sendNumeric(clientData, "472", modeString + " :is unknown mode char to me, only one mode can be changed at a time");
+        return ;
+    }
 
-    // Modes that have been applied, broadcast at the end in a single MODE line
-    std::string appliedModes;
-    std::string appliedParams;
-    char lastSign = 0;
+    const bool adding = (modeString[0] == '+');
+    const char mode = modeString[1];
 
-    for (size_t i = 0; i < modeString.size(); ++i)
+    // k, o and l take their parameter from tokens[3]
+    const bool hasParam = (tokens.size() > 3 && !tokens[3].empty());
+    const std::string param = hasParam ? tokens[3] : "";
+
+    // Parameter added to the broadcast MODE line, if any
+    std::string appliedParam;
+
+    // Invite only, IRC servers silently ignore modes that are arleady set
+    if (mode == 'i')
     {
-        const char mode = modeString[i];
+        if (currentChannel.inviteOnly == adding)
+            return ;
+        currentChannel.inviteOnly = adding;
+    }
 
-        if (mode == '+' || mode == '-'){
-            sign = mode;
-            continue;
-        }
+    // Topic can only be changed by operators
+    else if (mode == 't')
+    {
+        if (currentChannel.restrictedTopic == adding)
+            return ;
+        currentChannel.restrictedTopic = adding;
+    }
 
-        const bool adding = (sign == '+');
-
-        // Invite only, IRC servers silently ignore modes that are arleady set
-        if (mode == 'i')
+    // Password protection
+    else if (mode == 'k')
+    {
+        if (adding)
         {
-            if (currentChannel.inviteOnly == adding)
-                continue;
-
-            currentChannel.inviteOnly = adding;
-            addModeChange(appliedModes, appliedParams, lastSign, sign, mode, "");
-        }
-
-        // Topic can only be changed by operators
-        else if (mode == 't')
-        {
-            if (currentChannel.restrictedTopic == adding)
-                continue;
-
-            currentChannel.restrictedTopic = adding;
-            addModeChange(appliedModes, appliedParams, lastSign, sign, mode, "");
-        }
-
-        // Password protection
-        else if (mode == 'k')
-        {
-            if (adding)
-            {
-                // A password must be provided (461 == ERR_NEEDMOREPARAMS)
-                if (paramIndex >= tokens.size()){
-                    sendNumeric(clientData, "461", "MODE :Not enough parameters");
-                    continue;
-                }
-                const std::string key = tokens[paramIndex++];
-
-                // The password must be removed before setting a new one (467 == ERR_KEYSET)
-                if (currentChannel.isPasswordLocked){
-                    sendNumeric(clientData, "467", channelTarget + " :Channel key already set");
-                    continue;
-                }
-
-                currentChannel.isPasswordLocked = true;
-                currentChannel.password = key;
-                addModeChange(appliedModes, appliedParams, lastSign, sign, mode, key);
-            }
-            else
-            {
-                // Clients usually send the key with -k, consume it if there is one
-                if (paramIndex < tokens.size())
-                    paramIndex++;
-
-                if (!currentChannel.isPasswordLocked)
-                    continue;
-
-                currentChannel.isPasswordLocked = false;
-                currentChannel.password = "";
-                addModeChange(appliedModes, appliedParams, lastSign, sign, mode, "*");
-            }
-        }
-
-        // Give or take operator privileges
-        else if (mode == 'o')
-        {
-            // A nickname must be provided (461 == ERR_NEEDMOREPARAMS)
-            if (paramIndex >= tokens.size()){
+            // A password must be provided (461 == ERR_NEEDMOREPARAMS)
+            if (!hasParam){
                 sendNumeric(clientData, "461", "MODE :Not enough parameters");
-                continue;
-            }
-            const std::string targetNick = tokens[paramIndex++];
-
-            // The user must exist (401 == ERR_NOSUCHNICK) and be in the channel (441 == ERR_USERNOTINCHANNEL)
-            int targetSocket = server.getContactSocket(targetNick);
-            if (targetSocket == -1){
-                sendNumeric(clientData, "401", targetNick + " :No such nick/channel");
-                continue;
-            }
-            if (!isMember(currentChannel, targetSocket)){
-                sendNumeric(clientData, "441", targetNick + " " + channelTarget + " :They aren't on that channel");
-                continue;
+                return ;
             }
 
-            if (server.isOperator(currentChannel, targetSocket) == adding)
-                continue;
+            // The password must be removed before setting a new one (467 == ERR_KEYSET)
+            if (currentChannel.isPasswordLocked){
+                sendNumeric(clientData, "467", channelTarget + " :Channel key already set");
+                return ;
+            }
 
-            if (adding)
-                currentChannel.operators.push_back(targetSocket);
-            else
-                removeOperator(currentChannel, targetSocket);
-            addModeChange(appliedModes, appliedParams, lastSign, sign, mode, targetNick);
+            currentChannel.isPasswordLocked = true;
+            currentChannel.password = param;
+            appliedParam = param;
         }
-
-        // User limit
-        else if (mode == 'l')
-        {
-            if (adding)
-            {
-                // A limit must be provided (461 == ERR_NEEDMOREPARAMS)
-                if (paramIndex >= tokens.size()){
-                    sendNumeric(clientData, "461", "MODE :Not enough parameters");
-                    continue;
-                }
-                const std::string limitStr = tokens[paramIndex++];
-
-                // The limit must be a positive number, invalid limits are ignored
-                char *end;
-                long limit = std::strtol(limitStr.c_str(), &end, 10);
-                if (end == limitStr.c_str() || *end != '\0' || limit <= 0 || limit > INT_MAX){
-                    logMsg('e', std::string (clientData.username + " tried +l on channel " + tokens[1] + " with an invalid limit:"), limitStr);
-                    continue;
-                }
-
-                if (currentChannel.userLimit && currentChannel.maxUsers == static_cast<size_t>(limit))
-                    continue;
-
-                currentChannel.userLimit = true;
-                currentChannel.maxUsers = static_cast<size_t>(limit);
-                addModeChange(appliedModes, appliedParams, lastSign, sign, mode, numberToString(currentChannel.maxUsers));
-            }
-            else
-            {
-                if (!currentChannel.userLimit)
-                    continue;
-
-                currentChannel.userLimit = false;
-                addModeChange(appliedModes, appliedParams, lastSign, sign, mode, "");
-            }
-        }
-
-        // Unknown mode (472 == ERR_UNKNOWNMODE)
         else
         {
-            logMsg('e', std::string (clientData.username + " tried MODE " + std::string(1, mode) + ": unknown parameter"), "");
-            sendNumeric(clientData, "472", std::string(1, mode) + " :is unknown mode char to me");
+            // Clients usually send the key with -k, it isn't needed
+            if (!currentChannel.isPasswordLocked)
+                return ;
+
+            currentChannel.isPasswordLocked = false;
+            currentChannel.password = "";
+            appliedParam = "*";
         }
     }
 
-    // Every applied mode is announced to all the channel members, sender included
-    if (!appliedModes.empty()){
-        logMsg('i', std::string ("Channel " + tokens[1] + " modes changed by " + clientData.username + ":"), appliedModes + appliedParams);
-        broadcastIrcLine(currentChannel.members, userPrefix(clientData) + " MODE " + channelTarget + " " + appliedModes + appliedParams);
+    // Give or take operator privileges
+    else if (mode == 'o')
+    {
+        // A nickname must be provided (461 == ERR_NEEDMOREPARAMS)
+        if (!hasParam){
+            sendNumeric(clientData, "461", "MODE :Not enough parameters");
+            return ;
+        }
+
+        // The user must exist (401 == ERR_NOSUCHNICK) and be in the channel (441 == ERR_USERNOTINCHANNEL)
+        int targetSocket = server.getContactSocket(param);
+        if (targetSocket == -1){
+            sendNumeric(clientData, "401", param + " :No such nick/channel");
+            return ;
+        }
+        if (!isMember(currentChannel, targetSocket)){
+            sendNumeric(clientData, "441", param + " " + channelTarget + " :They aren't on that channel");
+            return ;
+        }
+
+        if (server.isOperator(currentChannel, targetSocket) == adding)
+            return ;
+
+        if (adding)
+            currentChannel.operators.push_back(targetSocket);
+        else
+            removeOperator(currentChannel, targetSocket);
+        appliedParam = param;
     }
+
+    // User limit
+    else if (mode == 'l')
+    {
+        if (adding)
+        {
+            // A limit must be provided (461 == ERR_NEEDMOREPARAMS)
+            if (!hasParam){
+                sendNumeric(clientData, "461", "MODE :Not enough parameters");
+                return ;
+            }
+
+            // The limit must be a positive number, invalid limits are ignored
+            char *end;
+            long limit = std::strtol(param.c_str(), &end, 10);
+            if (end == param.c_str() || *end != '\0' || limit <= 0 || limit > INT_MAX){
+                logMsg('e', std::string (clientData.username + " tried +l on channel " + tokens[1] + " with an invalid limit:"), param);
+                return ;
+            }
+
+            if (currentChannel.userLimit && currentChannel.maxUsers == static_cast<size_t>(limit))
+                return ;
+
+            currentChannel.userLimit = true;
+            currentChannel.maxUsers = static_cast<size_t>(limit);
+            appliedParam = numberToString(currentChannel.maxUsers);
+        }
+        else
+        {
+            if (!currentChannel.userLimit)
+                return ;
+            currentChannel.userLimit = false;
+        }
+    }
+
+    // Unknown mode (472 == ERR_UNKNOWNMODE)
+    else
+    {
+        logMsg('e', std::string (clientData.username + " tried MODE " + modeString + ": unknown parameter"), "");
+        sendNumeric(clientData, "472", std::string(1, mode) + " :is unknown mode char to me");
+        return ;
+    }
+
+    // The change is announced to all the channel members, sender included
+    std::string modeChange = modeString;
+    if (!appliedParam.empty())
+        modeChange += " " + appliedParam;
+
+    logMsg('i', std::string ("Channel " + tokens[1] + " mode changed by " + clientData.username + ":"), modeChange);
+    broadcastIrcLine(server, currentChannel.members, userPrefix(clientData) + " MODE " + channelTarget + " " + modeChange);
 }
 
 static void handlePING(ClientData &clientData, const std::vector<std::string> &tokens){
@@ -1024,6 +1009,21 @@ static void handlePING(ClientData &clientData, const std::vector<std::string> &t
     sendIrcFormattedMsg(clientData, ":localhost PONG localhost :" + origin);
 }
 
+// Leave the server: QUIT [:reason]
+static void handleQUIT(server &server, ClientData &clientData, const std::vector<std::string> &tokens){
+
+    // IRC servers use "Client Quit" when no reason is given
+    const std::string message = joinTrailing(tokens, 1);
+    const std::string reason = message.empty() ? "Client Quit" : "Quit: " + message;
+
+    // Announce it to the channels now, then close the connection once the ERROR line has been sent
+    quitChannels(server, clientData, reason);
+    sendIrcFormattedMsg(clientData, "ERROR :Closing Link: localhost (" + reason + ")");
+    clientData.quitReason = reason;
+    clientData.closing = true;
+    logMsg('i', std::string (clientData.username + " has quit:"), reason);
+}
+
 // Parse and handle commands
 void handleCommands(server &server, ClientData &clientData, std::string cmd){
 
@@ -1037,14 +1037,20 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
 
     if (tokens.size() > 0)
     {
+        // Commands are case insensitive ("join" == "JOIN")
+        for (size_t i = 0; i < tokens[0].size(); i++)
+            tokens[0][i] = std::toupper(static_cast<unsigned char>(tokens[0][i]));
+
         if (tokens[0] == "CAP")
             handleCAP(clientData, tokens);
-        else if (tokens[0] == "PASS" && tokens.size() == 2)
+        else if (tokens[0] == "PASS")
             handlePASS(server, clientData, tokens);        
-        else if (tokens[0] == "NICK" && tokens.size() == 2)
+        else if (tokens[0] == "NICK")
             handleNICK(server, clientData, tokens);
-        else if (tokens[0] == "USER" && tokens.size() >= 5)
+        else if (tokens[0] == "USER")
             handleUSER(clientData, tokens);
+        else if (tokens[0] == "QUIT")
+            handleQUIT(server, clientData, tokens);
         else if (tokens[0] == "JOIN")
             handleJOIN(server, clientData, tokens);
         else if (tokens[0] == "PRIVMSG")
@@ -1063,7 +1069,15 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
             handleMODE(server, clientData, tokens);
         else if (tokens[0] == "PING")
             handlePING(clientData, tokens);
-        else
+
+        // Answer to a PING, the server never sends any but clients may send it to keep the connection alive
+        else if (tokens[0] == "PONG")
+            return ;
+
+        // 421 == ERR_UNKNOWNCOMMAND
+        else {
             logMsg('w', "Unknown command: ", tokens[0]);
+            sendNumeric(clientData, "421", tokens[0] + " :Unknown command");
+        }
     }
 }

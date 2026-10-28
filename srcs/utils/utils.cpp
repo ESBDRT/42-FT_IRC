@@ -99,6 +99,38 @@ void removeSocketFromChannels(server &server, int socket){
             i++;
 }
 
+// Every socket sharing at least one channel with the provided socket, each listed once, the socket itself excluded
+std::vector<int> getChannelPeers(server &server, int socket){
+
+    std::vector<Channel> &channels = server.getChannelsList();
+    std::vector<int> peers;
+
+    for (size_t i = 0; i < channels.size(); i++)
+    {
+        const std::vector<int> &members = channels[i].members;
+        if (std::find(members.begin(), members.end(), socket) == members.end())
+            continue;
+
+        for (size_t j = 0; j < members.size(); j++)
+            if (members[j] != socket && std::find(peers.begin(), peers.end(), members[j]) == peers.end())
+                peers.push_back(members[j]);
+    }
+    return (peers);
+}
+
+// Announce the departure of the client to every user sharing a channel with him, then remove him from every channel
+// Calling it again does nothing since the client isn't in any channel anymore
+void quitChannels(server &server, ClientData &clientData, const std::string &reason){
+
+    if (clientData.isRegistered){
+        const std::string quitMsg = ":" + clientData.username + "!" + clientData.user + "@localhost QUIT :" + reason;
+        std::vector<int> peers = getChannelPeers(server, clientData.poll.fd);
+        for (size_t i = 0; i < peers.size(); i++)
+            server.queueMsg(peers[i], quitMsg);
+    }
+    removeSocketFromChannels(server, clientData.poll.fd);
+}
+
 // Remove the socket from a single channel (KICK), the channel is deleted if it has no members left
 // Any reference to that channel must not be used after this call
 void removeSocketFromChannel(server &server, const std::string &channelName, int socket){

@@ -1,14 +1,10 @@
 #include "../../include/main.hpp"
 #include <fcntl.h>
 
-// Applies non-blocking to the provided socket
+// Applies non-blocking to the provided socket, the subject only allows fcntl(fd, F_SETFL, O_NONBLOCK)
 static int set_nonblocking(int socket){
 
-    int flags = fcntl(socket, F_GETFL, 0);
-    if (flags == -1)
-        return (display_err("fcntl(F_GETFL): " + std::string(std::strerror(errno))), 1);
-
-    if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1)
+    if (fcntl(socket, F_SETFL, O_NONBLOCK) == -1)
         return (display_err("fcntl(F_SETFL): " + std::string(std::strerror(errno))), 1);
 
     return (0);
