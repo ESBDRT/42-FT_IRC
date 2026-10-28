@@ -648,6 +648,101 @@ static void handleTOPIC (server &server, ClientData &clientData, std::vector<std
     logMsg('i', std::string (clientData.username + " changed the topic of " + tokens[1] + " to: " + targetChannel.topic), "");
 }
 
+// Leave a channel: PART <#channel> [:reason], only one channel at a time
+static void handlePART (server &server, ClientData &clientData, std::vector<std::string> tokens){
+
+    // Check for client registration (451 == ERR_NOTREGISTERED)
+    if (!clientData.isRegistered){
+        sendNumeric(clientData, "451", ":You have not registered");
+        return ;
+    }
+
+    // Check that enough parameters are provided for that specific command (461 == ERR_NEEDMOREPARAMS)
+    if (tokens.size() < 2){
+        sendNumeric(clientData, "461", "PART :Not enough parameters");
+        return ;
+    }
+
+    // Refuse channel lists, only one channel at a time
+    if (refuseChannelList(clientData, tokens[1], "part"))
+        return ;
+
+    // Remove the # at index 0 from the channel name if there is any
+    if (!tokens[1].empty() && tokens[1][0] == '#')
+            tokens[1].erase(0, 1);
+
+    const std::string channelTarget = "#" + tokens[1];
+
+    // The reason is optional
+    const std::string reason = joinTrailing(tokens, 2);
+
+    // Try to retrieve the channel info (403 == ERR_NOSUCHCHANNEL)
+    Channel &targetChannel = server.getChannelInfo(tokens[1]);
+    if (targetChannel.name.empty()){
+        sendNumeric(clientData, "403", channelTarget + " :No such channel");
+        return ;
+    }
+
+    // The user must be in the channel (442 == ERR_NOTONCHANNEL)
+    if (!isMember(targetChannel, clientData.poll.fd)){
+        sendNumeric(clientData, "442", channelTarget + " :You're not on that channel");
+        return ;
+    }
+
+    // Announce the departure to every member, leaving user included, before removing him
+    std::string partMsg = userPrefix(clientData) + " PART " + channelTarget;
+    if (!reason.empty())
+        partMsg += " :" + reason;
+    broadcastIrcLine(targetChannel.members, partMsg);
+    logMsg('i', std::string (clientData.username + " left the " + tokens[1] + " channel"), reason);
+
+    // targetChannel must not be used after this call, the channel is deleted if it's now empty
+    removeSocketFromChannel(server, tokens[1], clientData.poll.fd);
+}
+
+// Send one 352 line describing the client (H == here, @ == channel operator)
+static void sendWhoReply(ClientData &clientData, const ClientData &target, const std::string &channelTarget, bool isOp){
+
+    // 352 == RPL_WHOREPLY: <channel> <user> <host> <server> <nick> <flags> :<hopcount> <realname>
+    sendNumeric(clientData, "352", channelTarget + " " + target.user + " localhost localhost " + target.username + " H" + (isOp ? "@" : "") + " :0 " + target.name);
+}
+
+// List the users of a channel, or a single user: WHO <#channel|nick>
+static void handleWHO (server &server, ClientData &clientData, std::vector<std::string> tokens){
+
+    // Check for client registration (451 == ERR_NOTREGISTERED)
+    if (!clientData.isRegistered){
+        sendNumeric(clientData, "451", ":You have not registered");
+        return ;
+    }
+
+    // Without a mask, nothing is listed
+    const std::string mask = tokens.size() < 2 ? "*" : tokens[1];
+
+    // Channel: list every member, an unknown channel just gets an empty list
+    if (mask[0] == '#')
+    {
+        Channel &targetChannel = server.getChannelInfo(mask.substr(1));
+        for (size_t i = 0; i < targetChannel.members.size(); ++i){
+            int memberSocket = targetChannel.members[i];
+            const ClientData *member = server.getClient(memberSocket);
+            if (member)
+                sendWhoReply(clientData, *member, mask, server.isOperator(targetChannel, memberSocket));
+        }
+    }
+
+    // Nickname: list that user if he exists
+    else if (mask != "*")
+    {
+        const ClientData *target = server.getClient(server.getContactSocket(mask));
+        if (target)
+            sendWhoReply(clientData, *target, "*", false);
+    }
+
+    // 315 == RPL_ENDOFWHO
+    sendNumeric(clientData, "315", mask + " :End of WHO list");
+}
+
 // Convert a number to a string (std::to_string is C++11)
 static std::string numberToString(size_t number){
 
@@ -725,6 +820,12 @@ static void handleMODE (server &server, ClientData &clientData, std::vector<std:
     // No mode provided, reply with the current channel modes (324 == RPL_CHANNELMODEIS)
     if (tokens.size() < 3){
         sendNumeric(clientData, "324", channelTarget + " " + channelModes(currentChannel, isMember(currentChannel, clientData.poll.fd)));
+        return ;
+    }
+
+    // Ban list query, irssi sends it after joining. Bans aren't handled so the list is always empty (368 == RPL_ENDOFBANLIST)
+    if (tokens.size() == 3 && (tokens[2] == "b" || tokens[2] == "+b")){
+        sendNumeric(clientData, "368", channelTarget + " :End of channel ban list");
         return ;
     }
 
@@ -954,6 +1055,10 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
             handleINVITE(server, clientData, tokens);
         else if (tokens[0] == "TOPIC")
             handleTOPIC(server, clientData, tokens);
+        else if (tokens[0] == "PART")
+            handlePART(server, clientData, tokens);
+        else if (tokens[0] == "WHO")
+            handleWHO(server, clientData, tokens);
         else if (tokens[0] == "MODE")
             handleMODE(server, clientData, tokens);
         else if (tokens[0] == "PING")

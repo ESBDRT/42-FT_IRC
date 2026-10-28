@@ -62,6 +62,7 @@ class server {
 
         int  getContactSocket(std::string contactUsername) const;
         std::string getNickname(int clientSocket) const;
+        const ClientData *getClient(int clientSocket) const;
 
         std::vector<int> getChannelMembers(std::string channelName) const;
         std::vector<Channel> &getChannelsList();

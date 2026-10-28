@@ -107,6 +107,15 @@ std::string server::getNickname(int clientSocket) const {
     return ("");
 }
 
+// Returns NULL if no client uses that socket, the pointer is invalidated when a client connects or disconnects
+const ClientData *server::getClient(int clientSocket) const {
+
+    for (size_t i = 1; i < this->_clients.size(); i++)
+        if (this->_clients[i].poll.fd == clientSocket)
+            return (&this->_clients[i]);
+    return (NULL);
+}
+
 std::vector<int> server::getChannelMembers(std::string channelName) const {
 
     for (size_t i = 0; i < this->_channels.size(); i++)
