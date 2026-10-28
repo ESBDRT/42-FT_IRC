@@ -47,6 +47,41 @@ static bool isMember(const Channel &channel, int clientSocket){
     return (false);
 }
 
+// Check if the socket has been invited to the channel
+static bool isInvited(const Channel &channel, int clientSocket){
+
+    for (size_t i = 0; i < channel.invited.size(); ++i)
+        if (channel.invited[i] == clientSocket)
+            return (true);
+    return (false);
+}
+
+// Remove the socket from the channel invites, an invite can only be used once
+static void removeInvite(Channel &channel, int clientSocket){
+
+    for (size_t i = 0; i < channel.invited.size(); ++i){
+        if (channel.invited[i] == clientSocket){
+            channel.invited.erase(channel.invited.begin() + i);
+            return ;
+        }
+    }
+}
+
+// Re-join the tokens from the provided index into a single trailing parameter, and remove the leading :
+static std::string joinTrailing(const std::vector<std::string> &tokens, size_t start){
+
+    std::string trailing;
+    for (size_t i = start; i < tokens.size(); ++i){
+        if (i > start)
+            trailing += ' ';
+        trailing += tokens[i];
+    }
+
+    if (!trailing.empty() && trailing[0] == ':')
+        trailing.erase(0, 1);
+    return (trailing);
+}
+
 // Announce the join to every member, then send the topic and the names list to the new member
 static void sendJoinReplies(server &server, ClientData &clientData, Channel &channel){
 
@@ -249,10 +284,19 @@ static void handleJOIN (server &server, ClientData &clientData, std::vector<std:
             return ;
         }
 
-        // Password is correct, add the user to the channel members and log it
+        // Check if the channel is invite only and if the user has been invited (473 == ERR_INVITEONLYCHAN)
+        else if (targetChannel.inviteOnly && !isInvited(targetChannel, clientData.poll.fd))
+        {
+            logMsg('e', std::string(clientData.username + " tried to join the invite only channel " + tokens[1] + " without an invite"), "");
+            sendNumeric(clientData, "473", channelTarget + " :Cannot join channel (+i)");
+            return ;
+        }
+
+        // Every check passed, add the user to the channel members, consume the invite and log it
         else
         {
             targetChannel.members.push_back(clientData.poll.fd);
+            removeInvite(targetChannel, clientData.poll.fd);
             sendJoinReplies(server, clientData, targetChannel);
             logMsg('i', std::string (clientData.username + " joined the " + tokens[1] + " channel"), "");
             return ;
@@ -367,17 +411,192 @@ static void handlePRIVMSG (server &server, ClientData &clientData, std::vector<s
 
 }   
 
-// static void handleKICK (ClientData &clientData, std::vector<std::string> tokens){
+// Kick a user from a channel: KICK <#channel> <nick> [:reason]
+static void handleKICK (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
-// }
+    // Check for client registration (451 == ERR_NOTREGISTERED)
+    if (!clientData.isRegistered){
+        sendNumeric(clientData, "451", ":You have not registered");
+        return ;
+    }
 
-// static void handleINVITE (ClientData &clientData, std::vector<std::string> tokens){
+    // Check that enough parameters are provided for that specific command (461 == ERR_NEEDMOREPARAMS)
+    if (tokens.size() < 3){
+        sendNumeric(clientData, "461", "KICK :Not enough parameters");
+        return ;
+    }
 
-// }
+    // Remove the # at index 0 from the channel name if there is any
+    if (!tokens[1].empty() && tokens[1][0] == '#')
+            tokens[1].erase(0, 1);
 
-// static void handleTOPIC (ClientData &clientData, std::vector<std::string> tokens){
+    const std::string channelTarget = "#" + tokens[1];
+    const std::string &targetNick = tokens[2];
 
-// }
+    // Try to retrieve the channel info (403 == ERR_NOSUCHCHANNEL)
+    Channel &targetChannel = server.getChannelInfo(tokens[1]);
+    if (targetChannel.name.empty()){
+        sendNumeric(clientData, "403", channelTarget + " :No such channel");
+        return ;
+    }
+
+    // The user must be in the channel (442 == ERR_NOTONCHANNEL)
+    if (!isMember(targetChannel, clientData.poll.fd)){
+        sendNumeric(clientData, "442", channelTarget + " :You're not on that channel");
+        return ;
+    }
+
+    // Only operators can kick (482 == ERR_CHANOPRIVSNEEDED)
+    if (!server.isOperator(targetChannel, clientData.poll.fd)){
+        logMsg('e', std::string (clientData.username + " tried to kick " + targetNick + " from " + tokens[1] + " but isn't an operator"), "");
+        sendNumeric(clientData, "482", channelTarget + " :You're not channel operator");
+        return ;
+    }
+
+    // The kicked user must exist (401 == ERR_NOSUCHNICK) and be in the channel (441 == ERR_USERNOTINCHANNEL)
+    int targetSocket = server.getContactSocket(targetNick);
+    if (targetSocket == -1){
+        sendNumeric(clientData, "401", targetNick + " :No such nick/channel");
+        return ;
+    }
+    if (!isMember(targetChannel, targetSocket)){
+        sendNumeric(clientData, "441", targetNick + " " + channelTarget + " :They aren't on that channel");
+        return ;
+    }
+
+    // The reason is optional, IRC uses the kicker nickname by default
+    std::string reason = joinTrailing(tokens, 3);
+    if (reason.empty())
+        reason = clientData.username;
+
+    // Announce the kick to every member, kicked user included, before removing him
+    broadcastIrcLine(targetChannel.members, userPrefix(clientData) + " KICK " + channelTarget + " " + targetNick + " :" + reason);
+    logMsg('i', std::string (clientData.username + " kicked " + targetNick + " from " + tokens[1] + " (" + reason + ")"), "");
+
+    // targetChannel must not be used after this call, the channel is deleted if it's now empty
+    removeSocketFromChannel(server, tokens[1], targetSocket);
+}
+
+// Invite a user to a channel: INVITE <nick> <#channel>
+static void handleINVITE (server &server, ClientData &clientData, std::vector<std::string> tokens){
+
+    // Check for client registration (451 == ERR_NOTREGISTERED)
+    if (!clientData.isRegistered){
+        sendNumeric(clientData, "451", ":You have not registered");
+        return ;
+    }
+
+    // Check that enough parameters are provided for that specific command (461 == ERR_NEEDMOREPARAMS)
+    if (tokens.size() < 3){
+        sendNumeric(clientData, "461", "INVITE :Not enough parameters");
+        return ;
+    }
+
+    const std::string &targetNick = tokens[1];
+
+    // Remove the # at index 0 from the channel name if there is any
+    if (!tokens[2].empty() && tokens[2][0] == '#')
+            tokens[2].erase(0, 1);
+
+    const std::string channelTarget = "#" + tokens[2];
+
+    // The invited user must exist (401 == ERR_NOSUCHNICK)
+    int targetSocket = server.getContactSocket(targetNick);
+    if (targetSocket == -1){
+        sendNumeric(clientData, "401", targetNick + " :No such nick/channel");
+        return ;
+    }
+
+    // Try to retrieve the channel info (403 == ERR_NOSUCHCHANNEL)
+    Channel &targetChannel = server.getChannelInfo(tokens[2]);
+    if (targetChannel.name.empty()){
+        sendNumeric(clientData, "403", channelTarget + " :No such channel");
+        return ;
+    }
+
+    // The user must be in the channel (442 == ERR_NOTONCHANNEL)
+    if (!isMember(targetChannel, clientData.poll.fd)){
+        sendNumeric(clientData, "442", channelTarget + " :You're not on that channel");
+        return ;
+    }
+
+    // Only operators can invite in an invite only channel (482 == ERR_CHANOPRIVSNEEDED)
+    if (targetChannel.inviteOnly && !server.isOperator(targetChannel, clientData.poll.fd)){
+        logMsg('e', std::string (clientData.username + " tried to invite " + targetNick + " to " + tokens[2] + " but isn't an operator"), "");
+        sendNumeric(clientData, "482", channelTarget + " :You're not channel operator");
+        return ;
+    }
+
+    // The invited user must not be in the channel arleady (443 == ERR_USERONCHANNEL)
+    if (isMember(targetChannel, targetSocket)){
+        sendNumeric(clientData, "443", targetNick + " " + channelTarget + " :is already on channel");
+        return ;
+    }
+
+    if (!isInvited(targetChannel, targetSocket))
+        targetChannel.invited.push_back(targetSocket);
+
+    // Confirm to the sender (341 == RPL_INVITING) and notify the invited user
+    sendNumeric(clientData, "341", targetNick + " " + channelTarget);
+    broadcastIrcLine(std::vector<int>(1, targetSocket), userPrefix(clientData) + " INVITE " + targetNick + " :" + channelTarget);
+    logMsg('i', std::string (clientData.username + " invited " + targetNick + " to " + tokens[2]), "");
+}
+
+// View or change the topic of a channel: TOPIC <#channel> [:topic]
+static void handleTOPIC (server &server, ClientData &clientData, std::vector<std::string> tokens){
+
+    // Check for client registration (451 == ERR_NOTREGISTERED)
+    if (!clientData.isRegistered){
+        sendNumeric(clientData, "451", ":You have not registered");
+        return ;
+    }
+
+    // Check that enough parameters are provided for that specific command (461 == ERR_NEEDMOREPARAMS)
+    if (tokens.size() < 2){
+        sendNumeric(clientData, "461", "TOPIC :Not enough parameters");
+        return ;
+    }
+
+    // Remove the # at index 0 from the channel name if there is any
+    if (!tokens[1].empty() && tokens[1][0] == '#')
+            tokens[1].erase(0, 1);
+
+    const std::string channelTarget = "#" + tokens[1];
+
+    // Try to retrieve the channel info (403 == ERR_NOSUCHCHANNEL)
+    Channel &targetChannel = server.getChannelInfo(tokens[1]);
+    if (targetChannel.name.empty()){
+        sendNumeric(clientData, "403", channelTarget + " :No such channel");
+        return ;
+    }
+
+    // The user must be in the channel (442 == ERR_NOTONCHANNEL)
+    if (!isMember(targetChannel, clientData.poll.fd)){
+        sendNumeric(clientData, "442", channelTarget + " :You're not on that channel");
+        return ;
+    }
+
+    // No topic provided, reply with the current one (331 == RPL_NOTOPIC | 332 == RPL_TOPIC)
+    if (tokens.size() < 3){
+        if (targetChannel.topic.empty())
+            sendNumeric(clientData, "331", channelTarget + " :No topic is set");
+        else
+            sendNumeric(clientData, "332", channelTarget + " :" + targetChannel.topic);
+        return ;
+    }
+
+    // Only operators can change the topic when the channel is +t (482 == ERR_CHANOPRIVSNEEDED)
+    if (targetChannel.restrictedTopic && !server.isOperator(targetChannel, clientData.poll.fd)){
+        logMsg('e', std::string (clientData.username + " tried to change the topic of " + tokens[1] + " but isn't an operator"), "");
+        sendNumeric(clientData, "482", channelTarget + " :You're not channel operator");
+        return ;
+    }
+
+    // Set the new topic ("TOPIC #channel :" clears it) and announce it to every member
+    targetChannel.topic = joinTrailing(tokens, 2);
+    broadcastIrcLine(targetChannel.members, userPrefix(clientData) + " TOPIC " + channelTarget + " :" + targetChannel.topic);
+    logMsg('i', std::string (clientData.username + " changed the topic of " + tokens[1] + " to: " + targetChannel.topic), "");
+}
 
 static void handleMODE (server &server, ClientData &clientData, std::vector<std::string> tokens){
 
@@ -563,12 +782,12 @@ void handleCommands(server &server, ClientData &clientData, std::string cmd){
             handleJOIN(server, clientData, tokens);
         else if (tokens[0] == "PRIVMSG")
             handlePRIVMSG(server, clientData, tokens);
-        // else if (tokens[0] == "KICK")
-        //     handleKICK(clientData, tokens);
-        // else if (tokens[0] == "INVITE")
-        //     handleINVITE(clientData, tokens);
-        // else if (tokens[0] == "TOPIC")
-        //     handleTOPIC(clientData, tokens);
+        else if (tokens[0] == "KICK")
+            handleKICK(server, clientData, tokens);
+        else if (tokens[0] == "INVITE")
+            handleINVITE(server, clientData, tokens);
+        else if (tokens[0] == "TOPIC")
+            handleTOPIC(server, clientData, tokens);
         else if (tokens[0] == "MODE")
             handleMODE(server, clientData, tokens);
         else if (tokens[0] == "PING")

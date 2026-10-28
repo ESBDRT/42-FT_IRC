@@ -48,8 +48,11 @@ void logMsg(char lvl, std::string msg, std::string arg);
 // Output the err message passed in parameter in stderr
 void display_err(std::string err);
 
-// Remove the socket from the members and operators lists of every channel
+// Remove the socket from the members, operators and invites lists of every channel
 void removeSocketFromChannels(server &server, int socket);
+
+// Remove the socket from a single channel, deletes the channel if it has no members left
+void removeSocketFromChannel(server &server, const std::string &channelName, int socket);
 
 
 // ----------------------------------|NETWORK|---------------------------------- //

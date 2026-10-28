@@ -31,6 +31,7 @@ class Channel {
 
         std::vector<int> members;
         std::vector<int> operators;
+        std::vector<int> invited;   // Sockets allowed to join while the channel is invite only
         std::string      name;
         std::string      topic;
         std::string      password;

@@ -35,13 +35,13 @@ ClientData::~ClientData(){
 }
 
 Channel::Channel()
-    : members(), operators(), name(), topic(), password(),
+    : members(), operators(), invited(), name(), topic(), password(),
       isPasswordLocked(false), restrictedTopic(false), inviteOnly(false),
       userLimit(false), maxUsers(0), currentUsers(0){
 }
 
 Channel::Channel(const Channel &other)
-    : members(other.members), operators(other.operators), name(other.name),
+    : members(other.members), operators(other.operators), invited(other.invited), name(other.name),
       topic(other.topic), password(other.password),
       isPasswordLocked(other.isPasswordLocked),
       restrictedTopic(other.restrictedTopic), inviteOnly(other.inviteOnly),
@@ -53,6 +53,7 @@ Channel &Channel::operator=(const Channel &other){
     if (this != &other){
         members = other.members;
         operators = other.operators;
+        invited = other.invited;
         name = other.name;
         topic = other.topic;
         password = other.password;
@@ -133,6 +134,7 @@ Channel &server::getChannelInfo(std::string channelName){
     emptyChannel.name = "";
     emptyChannel.members.clear();
     emptyChannel.operators.clear();
+    emptyChannel.invited.clear();
     return (emptyChannel);
 }   
 
