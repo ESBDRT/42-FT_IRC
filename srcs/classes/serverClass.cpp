@@ -97,6 +97,14 @@ int server::getContactSocket(std::string contactUsername) const {
     return (-1);
 }
 
+std::string server::getNickname(int clientSocket) const {
+
+    for (size_t i = 1; i < this->_clients.size(); i++)
+        if (this->_clients[i].poll.fd == clientSocket)
+            return (this->_clients[i].username);
+    return ("");
+}
+
 std::vector<int> server::getChannelMembers(std::string channelName) const {
 
     for (size_t i = 0; i < this->_channels.size(); i++)
